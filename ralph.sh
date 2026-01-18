@@ -485,8 +485,9 @@ show_header() {
 }
 
 # Show progress bar
-# Shows percentage: ████████░░░░ 40%
-# Width adjusts to terminal width (max 50 chars)
+# Format: Progress: ████████░░░░░░░░ 40% (2/5 stories)
+# Width: 20 characters for bar
+# Updates after each story completion
 show_progress_bar() {
     local total completed percentage
     total=$(count_stories)
@@ -499,17 +500,8 @@ show_progress_bar() {
         percentage=$((completed * 100 / total))
     fi
 
-    # Get terminal width and calculate bar width (max 50)
-    local term_width bar_width
-    term_width=$(tput cols 2>/dev/null || echo 80)
-    # Reserve space for percentage display " 100%" = 5 chars, plus some padding
-    bar_width=$((term_width - 10))
-    if [[ $bar_width -gt 50 ]]; then
-        bar_width=50
-    fi
-    if [[ $bar_width -lt 10 ]]; then
-        bar_width=10
-    fi
+    # Fixed bar width of 20 characters as per acceptance criteria
+    local bar_width=20
 
     # Calculate filled and empty portions
     local filled_width empty_width
@@ -525,8 +517,8 @@ show_progress_bar() {
         empty_bar+="░"
     done
 
-    # Display the progress bar
-    printf "${GREEN}%s${GRAY}%s${NC} %3d%%\n" "$filled_bar" "$empty_bar" "$percentage"
+    # Display the progress bar with format: Progress: ████████░░░░░░░░ 40% (2/5 stories)
+    printf "Progress: ${GREEN}%s${GRAY}%s${NC} %3d%% (%d/%d stories)\n" "$filled_bar" "$empty_bar" "$percentage" "$completed" "$total"
 }
 
 # Show final summary when all stories complete
