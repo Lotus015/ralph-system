@@ -436,17 +436,52 @@ get_elapsed_time() {
 }
 
 # Show header box with project info
+# Usage: show_header iteration_number
+# Shows: 🎯 Project name, 🔄 Iteration X/Y, ⏱️ Total elapsed
+# Uses Unicode box drawing: ┌─┐ │ └─┘
+# Width adjusts to content (min 50 chars)
 show_header() {
     local iteration="$1"
-    local project_name elapsed_time
+    local project_name elapsed_time total_stories
     project_name=$(jq -r '.project' prd.json)
     elapsed_time=$(get_elapsed_time)
+    total_stories=$(count_stories)
 
-    echo -e "${BLUE}╔══════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║${NC}  ${GREEN}${project_name}${NC}"
-    echo -e "${BLUE}║${NC}  Iteration: ${YELLOW}${iteration}${NC} / ${MAX_ITERATIONS}"
-    echo -e "${BLUE}║${NC}  Elapsed: ${YELLOW}${elapsed_time}${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════════════════╝${NC}"
+    # Build content lines
+    local line1="🎯 ${project_name}"
+    local line2="🔄 Iteration ${iteration}/${total_stories}"
+    local line3="⏱️  Total elapsed: ${elapsed_time}"
+
+    # Calculate max content width (min 50 chars)
+    local max_len=50
+    local len1=${#line1}
+    local len2=${#line2}
+    local len3=${#line3}
+    [[ $len1 -gt $max_len ]] && max_len=$len1
+    [[ $len2 -gt $max_len ]] && max_len=$len2
+    [[ $len3 -gt $max_len ]] && max_len=$len3
+
+    # Add padding for box (2 spaces each side)
+    local box_width=$((max_len + 4))
+
+    # Build horizontal border
+    local border=""
+    for ((i=0; i<box_width; i++)); do
+        border+="─"
+    done
+
+    # Pad content lines to box width
+    local pad1 pad2 pad3
+    pad1=$((box_width - len1 - 2))
+    pad2=$((box_width - len2 - 2))
+    pad3=$((box_width - len3 - 2))
+
+    # Print the box
+    echo -e "${BLUE}┌${border}┐${NC}"
+    printf "${BLUE}│${NC} ${GREEN}%s${NC}%*s ${BLUE}│${NC}\n" "$line1" "$pad1" ""
+    printf "${BLUE}│${NC} ${YELLOW}%s${NC}%*s ${BLUE}│${NC}\n" "$line2" "$pad2" ""
+    printf "${BLUE}│${NC} %s%*s ${BLUE}│${NC}\n" "$line3" "$pad3" ""
+    echo -e "${BLUE}└${border}┘${NC}"
 }
 
 # Show progress bar
