@@ -4,13 +4,25 @@
 
 set -e
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-CYAN='\033[0;36m'
-GRAY='\033[0;90m'
-NC='\033[0m'
+# =============================================================================
+# Color Theme - Consistent color scheme for UI
+# =============================================================================
+# Box/Border colors
+CYAN='\033[0;36m'           # Boxes, borders, separators
+
+# Status colors
+GREEN='\033[0;32m'          # Success, completed items
+YELLOW='\033[1;33m'         # In-progress, warnings, current item
+RED='\033[0;31m'            # Errors, failures
+
+# Text colors
+WHITE='\033[1;37m'          # Emphasis, important text
+DIM='\033[2m'               # Dim text for pending/inactive items
+DIM_WHITE='\033[2;37m'      # Dim white for pending items
+GRAY='\033[0;90m'           # Secondary info (timestamps, hints)
+
+# Reset
+NC='\033[0m'                # No color - reset to default
 
 # ============================================================
 # Spinner Functions (S1)
@@ -419,6 +431,7 @@ count_completed() {
 }
 
 # Display progress
+# Color scheme: CYAN for boxes, GREEN for complete, DIM_WHITE for pending
 show_progress() {
     local total completed
     total=$(count_stories)
@@ -429,12 +442,12 @@ show_progress() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    # Show each story status
+    # Show each story status (green=complete, dim white=pending)
     jq -r '.userStories[] | "\(.id)|\(.title)|\(.passes)"' prd.json | while IFS='|' read -r id title passes; do
         if [[ "$passes" == "true" ]]; then
             echo -e "  ${GREEN}✓${NC} $id: $title"
         else
-            echo -e "  ${YELLOW}○${NC} $id: $title"
+            echo -e "  ${DIM_WHITE}○${NC} $id: $title"
         fi
     done
 
@@ -534,7 +547,8 @@ show_progress_bar() {
     done
 
     # Display the progress bar with format: Progress: ████████░░░░░░░░ 40% (2/5 stories)
-    printf "Progress: ${GREEN}%s${GRAY}%s${NC} %3d%% (%d/%d stories)\n" "$filled_bar" "$empty_bar" "$percentage" "$completed" "$total"
+    # Uses GREEN for filled portion, DIM for empty portion
+    printf "Progress: ${GREEN}%s${DIM}%s${NC} %3d%% (%d/%d stories)\n" "$filled_bar" "$empty_bar" "$percentage" "$completed" "$total"
 }
 
 # Show final completion summary when all stories complete
@@ -671,7 +685,7 @@ format_duration() {
 
 # Show story list with status icons
 # Icons: ✅ complete, 🔄 in-progress, ⏸️ pending
-# Color coded: green=done, yellow=current, gray=pending
+# Color coded: green=done, yellow=current, dim white=pending
 # Shows duration in MM:SS format for completed stories
 show_story_list() {
     local current_story_id="${1:-}"
@@ -685,15 +699,15 @@ show_story_list() {
             local time_display=""
             if [[ "$duration_secs" -gt 0 ]]; then
                 # Format duration in MM:SS
-                time_display=" ($(format_duration "$duration_secs"))"
+                time_display=" ${GRAY}($(format_duration "$duration_secs"))${NC}"
             fi
-            echo -e "  ${GREEN}✅ ${id}: ${title}${time_display}${NC}"
+            echo -e "  ${GREEN}✅ ${id}: ${title}${NC}${time_display}"
         elif [[ "$id" == "$current_story_id" ]]; then
             # Current story being worked on - yellow with spinner
             echo -e "  ${YELLOW}🔄 ${id}: ${title}${NC}"
         else
-            # Pending story - gray with pause icon
-            echo -e "  ${GRAY}⏸️  ${id}: ${title}${NC}"
+            # Pending story - dim white with pause icon
+            echo -e "  ${DIM_WHITE}⏸️  ${id}: ${title}${NC}"
         fi
     done
 }
@@ -706,8 +720,8 @@ main() {
     # Capture start time for elapsed time calculation
     START_TIME=$(date +%s)
 
-    echo -e "${CYAN}Ralph Loop System v1.0${NC}"
-    echo -e "Max iterations: ${MAX_ITERATIONS}"
+    echo -e "${CYAN}Ralph Loop System${NC} ${WHITE}v1.0${NC}"
+    echo -e "Max iterations: ${WHITE}${MAX_ITERATIONS}${NC}"
     echo ""
 
     show_progress
