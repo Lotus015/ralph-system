@@ -9,6 +9,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
+GRAY='\033[0;90m'
 NC='\033[0m'
 
 # Show usage
@@ -250,6 +251,34 @@ show_header() {
     echo -e "${BLUE}╚══════════════════════════════════════════════════╝${NC}"
 }
 
+# Show story list with status icons
+# Icons: ✅ complete, 🔄 in-progress, ⏸️ pending
+# Color coded: green=done, yellow=current, gray=pending
+show_story_list() {
+    local current_story_id="${1:-}"
+
+    echo -e "${BLUE}Stories:${NC}"
+
+    # Read stories and display with appropriate icons and colors
+    jq -r '.userStories[] | "\(.id)|\(.title)|\(.passes)|\(.completedAt // "")"' prd.json | while IFS='|' read -r id title passes completed_at; do
+        if [[ "$passes" == "true" ]]; then
+            # Completed story - green with checkmark
+            local time_display=""
+            if [[ -n "$completed_at" ]]; then
+                # Extract time portion (HH:MM:SS) from ISO timestamp
+                time_display=" (${completed_at:11:8})"
+            fi
+            echo -e "  ${GREEN}✅ ${id}: ${title}${time_display}${NC}"
+        elif [[ "$id" == "$current_story_id" ]]; then
+            # Current story being worked on - yellow with spinner
+            echo -e "  ${YELLOW}🔄 ${id}: ${title}${NC}"
+        else
+            # Pending story - gray with pause icon
+            echo -e "  ${GRAY}⏸️  ${id}: ${title}${NC}"
+        fi
+    done
+}
+
 # Main loop
 main() {
     check_dependencies
@@ -292,6 +321,10 @@ main() {
 
         # Show header with project info at start of each iteration
         show_header "$iteration"
+        echo ""
+
+        # Show story list with current story highlighted
+        show_story_list "$story_id"
         echo ""
 
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -371,7 +404,8 @@ main() {
                 fi
             fi
 
-            show_progress
+            # Show updated story list after completion
+            show_story_list
         elif echo "$result_text" | grep -q "<promise>CONTINUE</promise>"; then
             echo -e "${YELLOW}Story $story_id needs more work, continuing...${NC}"
         else
