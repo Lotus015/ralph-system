@@ -8,7 +8,7 @@ set -e
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 GRAY='\033[0;90m'
 NC='\033[0m'
 
@@ -113,7 +113,7 @@ show_story_summary() {
 
     # Build compact summary (max 10 lines)
     echo ""
-    echo -e "${BLUE}┌─ Summary: ${story_id} ────────────────────────────────────${NC}"
+    echo -e "${CYAN}┌─ Summary: ${story_id} ────────────────────────────────────${NC}"
 
     # Files created (1-2 lines)
     if [[ $created_count -gt 0 ]]; then
@@ -122,7 +122,7 @@ show_story_summary() {
         if [[ ${#created_names} -gt 45 ]]; then
             created_names="${created_names:0:42}..."
         fi
-        echo -e "${BLUE}│${NC} ${GREEN}+${NC} Created: ${created_count} file(s): ${created_names}"
+        echo -e "${CYAN}│${NC} ${GREEN}+${NC} Created: ${created_count} file(s): ${created_names}"
     fi
 
     # Files modified (1-2 lines)
@@ -132,7 +132,7 @@ show_story_summary() {
         if [[ ${#modified_names} -gt 45 ]]; then
             modified_names="${modified_names:0:42}..."
         fi
-        echo -e "${BLUE}│${NC} ${YELLOW}~${NC} Modified: ${modified_count} file(s): ${modified_names}"
+        echo -e "${CYAN}│${NC} ${YELLOW}~${NC} Modified: ${modified_count} file(s): ${modified_names}"
     fi
 
     # Test results (1 line)
@@ -144,14 +144,14 @@ show_story_summary() {
         test_icon="✗"
         test_color="${RED}"
     fi
-    echo -e "${BLUE}│${NC} ${test_color}${test_icon}${NC} Tests: ${test_cmd}"
+    echo -e "${CYAN}│${NC} ${test_color}${test_icon}${NC} Tests: ${test_cmd}"
 
     # Commit message (1 line, truncate if needed)
     local display_msg="$commit_msg"
     if [[ ${#display_msg} -gt 50 ]]; then
         display_msg="${display_msg:0:47}..."
     fi
-    echo -e "${BLUE}│${NC} 📝 Commit: ${display_msg}"
+    echo -e "${CYAN}│${NC} 📝 Commit: ${display_msg}"
 
     # Push status (1 line)
     local push_icon
@@ -160,12 +160,12 @@ show_story_summary() {
         "FAILED")  push_icon="${RED}✗ Failed${NC}" ;;
         *)         push_icon="${GRAY}- Skipped${NC}" ;;
     esac
-    echo -e "${BLUE}│${NC} 🚀 Push: ${push_icon}"
+    echo -e "${CYAN}│${NC} 🚀 Push: ${push_icon}"
 
     # Duration (1 line)
-    echo -e "${BLUE}│${NC} ⏱️  Duration: ${duration_formatted}"
+    echo -e "${CYAN}│${NC} ⏱️  Duration: ${duration_formatted}"
 
-    echo -e "${BLUE}└──────────────────────────────────────────────────────${NC}"
+    echo -e "${CYAN}└──────────────────────────────────────────────────────${NC}"
 }
 
 # ============================================================
@@ -175,7 +175,7 @@ show_story_summary() {
 # Show clear separator line before iteration starts
 show_separator() {
     echo ""
-    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
     echo ""
 }
 
@@ -191,7 +191,7 @@ show_iteration_header() {
 # Log progress message with > prefix (during work)
 log_progress() {
     local message="$1"
-    echo -e "${BLUE}>${NC} ${message}"
+    echo -e "${CYAN}>${NC} ${message}"
 }
 
 # Log success message with ✓ prefix (on completion)
@@ -406,9 +406,9 @@ show_progress() {
     total=$(count_stories)
     completed=$(count_completed)
 
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}Ralph Loop System - Progress${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Ralph Loop System - Progress${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
     # Show each story status
@@ -422,7 +422,7 @@ show_progress() {
 
     echo ""
     echo -e "Progress: ${GREEN}$completed${NC}/${total} stories complete"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
 # Calculate elapsed time since START_TIME
@@ -477,11 +477,11 @@ show_header() {
     pad3=$((box_width - len3 - 2))
 
     # Print the box
-    echo -e "${BLUE}┌${border}┐${NC}"
-    printf "${BLUE}│${NC} ${GREEN}%s${NC}%*s ${BLUE}│${NC}\n" "$line1" "$pad1" ""
-    printf "${BLUE}│${NC} ${YELLOW}%s${NC}%*s ${BLUE}│${NC}\n" "$line2" "$pad2" ""
-    printf "${BLUE}│${NC} %s%*s ${BLUE}│${NC}\n" "$line3" "$pad3" ""
-    echo -e "${BLUE}└${border}┘${NC}"
+    echo -e "${CYAN}┌${border}┐${NC}"
+    printf "${CYAN}│${NC} ${GREEN}%s${NC}%*s ${CYAN}│${NC}\n" "$line1" "$pad1" ""
+    printf "${CYAN}│${NC} ${YELLOW}%s${NC}%*s ${CYAN}│${NC}\n" "$line2" "$pad2" ""
+    printf "${CYAN}│${NC} %s%*s ${CYAN}│${NC}\n" "$line3" "$pad3" ""
+    echo -e "${CYAN}└${border}┘${NC}"
 }
 
 # Show progress bar
@@ -631,7 +631,7 @@ format_duration() {
 show_story_list() {
     local current_story_id="${1:-}"
 
-    echo -e "${BLUE}Stories:${NC}"
+    echo -e "${CYAN}Stories:${NC}"
 
     # Read stories and display with appropriate icons and colors
     jq -r '.userStories[] | "\(.id)|\(.title)|\(.passes)|\(.durationSecs // 0)"' prd.json | while IFS='|' read -r id title passes duration_secs; do
@@ -661,7 +661,7 @@ main() {
     # Capture start time for elapsed time calculation
     START_TIME=$(date +%s)
 
-    echo -e "${BLUE}Ralph Loop System v1.0${NC}"
+    echo -e "${CYAN}Ralph Loop System v1.0${NC}"
     echo -e "Max iterations: ${MAX_ITERATIONS}"
     echo ""
 
