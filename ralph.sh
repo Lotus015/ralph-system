@@ -616,12 +616,12 @@ show_completion_summary() {
     echo ""
 }
 
-# Format seconds to MM:SS
+# Format seconds to Xm Ys format
 format_duration() {
     local secs="$1"
     local mins=$((secs / 60))
     local remaining_secs=$((secs % 60))
-    printf "%02d:%02d" "$mins" "$remaining_secs"
+    printf "%dm %02ds" "$mins" "$remaining_secs"
 }
 
 # Show story list with status icons
