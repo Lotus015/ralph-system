@@ -1,0 +1,300 @@
+#!/usr/bin/env bash
+# Ralph Loop System - Main execution loop
+# Runs Claude Code iterations to complete user stories
+
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Show usage
+show_usage() {
+    echo "Usage: ralph [max_iterations]"
+    echo ""
+    echo "Run the Ralph Loop System to complete user stories from prd.json"
+    echo ""
+    echo "Arguments:"
+    echo "  max_iterations  Maximum number of iterations (default: 50)"
+    echo ""
+    echo "Examples:"
+    echo "  ralph        # Run with default 50 iterations"
+    echo "  ralph 10     # Run with max 10 iterations"
+    exit 0
+}
+
+# Handle help flag
+if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
+    show_usage
+fi
+
+# Configuration
+MAX_ITERATIONS=${1:-50}
+SLEEP_BETWEEN_ITERATIONS=2
+
+# Validate max_iterations is a number
+if ! [[ "$MAX_ITERATIONS" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Error: max_iterations must be a positive number${NC}"
+    show_usage
+fi
+
+# Check dependencies
+check_dependencies() {
+    if ! command -v jq &> /dev/null; then
+        echo -e "${RED}Error: jq is not installed${NC}"
+        echo "Install with: brew install jq (macOS) or apt install jq (Linux)"
+        exit 1
+    fi
+
+    if ! command -v claude &> /dev/null; then
+        echo -e "${RED}Error: Claude Code CLI is not installed${NC}"
+        exit 1
+    fi
+
+    if ! command -v git &> /dev/null; then
+        echo -e "${RED}Error: git is not installed${NC}"
+        exit 1
+    fi
+}
+
+# Check required files exist
+check_files() {
+    if [[ ! -f "prd.json" ]]; then
+        echo -e "${RED}Error: prd.json not found${NC}"
+        echo "Run ralph-init to set up a new project or create prd.json manually"
+        exit 1
+    fi
+
+    if ! jq empty prd.json 2>/dev/null; then
+        echo -e "${RED}Error: prd.json is not valid JSON${NC}"
+        exit 1
+    fi
+
+    if [[ ! -f "prompt.md" ]]; then
+        echo -e "${RED}Error: prompt.md not found${NC}"
+        exit 1
+    fi
+
+    # Create progress.txt if it doesn't exist
+    if [[ ! -f "progress.txt" ]]; then
+        touch progress.txt
+    fi
+
+    # Create .ralph-state if it doesn't exist
+    if [[ ! -f ".ralph-state" ]]; then
+        echo "0" > .ralph-state
+    fi
+}
+
+# Get timestamp in ISO format
+get_timestamp() {
+    date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+# Get current iteration number
+get_iteration() {
+    cat .ralph-state
+}
+
+# Increment iteration counter
+increment_iteration() {
+    local current
+    current=$(get_iteration)
+    echo $((current + 1)) > .ralph-state
+}
+
+# Find next story to work on (first with passes: false, lowest priority)
+get_next_story() {
+    jq -r '.userStories | map(select(.passes == false)) | sort_by(.priority) | .[0] // empty' prd.json
+}
+
+# Get story field by id
+get_story_field() {
+    local story_id="$1"
+    local field="$2"
+    jq -r --arg id "$story_id" '.userStories[] | select(.id == $id) | .'"$field" prd.json
+}
+
+# Get acceptance criteria as bullet list
+get_acceptance_criteria() {
+    local story_id="$1"
+    jq -r --arg id "$story_id" '.userStories[] | select(.id == $id) | .acceptance | map("- " + .) | join("\n")' prd.json
+}
+
+# Get test commands as single string
+get_test_commands() {
+    local story_id="$1"
+    jq -r --arg id "$story_id" '.userStories[] | select(.id == $id) | .tests | join(" && ")' prd.json
+}
+
+# Generate prompt from template
+generate_prompt() {
+    local story_id="$1"
+    local story_title="$2"
+    local story_description="$3"
+    local acceptance_criteria="$4"
+    local test_commands="$5"
+    local iteration="$6"
+
+    local prompt
+    prompt=$(cat prompt.md)
+
+    # Replace placeholders
+    prompt="${prompt//STORY_ID/$story_id}"
+    prompt="${prompt//STORY_TITLE/$story_title}"
+    prompt="${prompt//STORY_DESCRIPTION/$story_description}"
+    prompt="${prompt//ACCEPTANCE_CRITERIA/$acceptance_criteria}"
+    prompt="${prompt//TEST_COMMANDS/$test_commands}"
+    prompt="${prompt//Iteration N/Iteration $iteration}"
+
+    echo "$prompt"
+}
+
+# Mark story as complete in prd.json
+mark_story_complete() {
+    local story_id="$1"
+    local timestamp
+    timestamp=$(get_timestamp)
+
+    jq --arg id "$story_id" --arg ts "$timestamp" \
+        '(.userStories[] | select(.id == $id)) |= . + {passes: true, completedAt: $ts}' \
+        prd.json > prd.json.tmp && mv prd.json.tmp prd.json
+}
+
+# Count stories
+count_stories() {
+    jq '.userStories | length' prd.json
+}
+
+# Count completed stories
+count_completed() {
+    jq '[.userStories[] | select(.passes == true)] | length' prd.json
+}
+
+# Display progress
+show_progress() {
+    local total completed
+    total=$(count_stories)
+    completed=$(count_completed)
+
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Ralph Loop System - Progress${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    # Show each story status
+    jq -r '.userStories[] | "\(.id)|\(.title)|\(.passes)"' prd.json | while IFS='|' read -r id title passes; do
+        if [[ "$passes" == "true" ]]; then
+            echo -e "  ${GREEN}✓${NC} $id: $title"
+        else
+            echo -e "  ${YELLOW}○${NC} $id: $title"
+        fi
+    done
+
+    echo ""
+    echo -e "Progress: ${GREEN}$completed${NC}/${total} stories complete"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+# Main loop
+main() {
+    check_dependencies
+    check_files
+
+    echo -e "${BLUE}Ralph Loop System v1.0${NC}"
+    echo -e "Max iterations: ${MAX_ITERATIONS}"
+    echo ""
+
+    show_progress
+    echo ""
+
+    local iteration
+    iteration=$(get_iteration)
+
+    while [[ $iteration -lt $MAX_ITERATIONS ]]; do
+        # Check if all stories are complete
+        local next_story
+        next_story=$(get_next_story)
+
+        if [[ -z "$next_story" ]]; then
+            echo -e "${GREEN}All stories complete!${NC}"
+            show_progress
+            exit 0
+        fi
+
+        # Extract story details
+        local story_id story_title story_description acceptance_criteria test_commands
+        story_id=$(echo "$next_story" | jq -r '.id')
+        story_title=$(echo "$next_story" | jq -r '.title')
+        story_description=$(echo "$next_story" | jq -r '.description')
+        acceptance_criteria=$(echo "$next_story" | jq -r '.acceptance | map("- " + .) | join("\n")')
+        test_commands=$(echo "$next_story" | jq -r '.tests | join(" && ")')
+
+        increment_iteration
+        iteration=$(get_iteration)
+
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${YELLOW}Iteration $iteration: Working on $story_id - $story_title${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+        # Generate prompt
+        local prompt
+        prompt=$(generate_prompt "$story_id" "$story_title" "$story_description" "$acceptance_criteria" "$test_commands" "$iteration")
+
+        # Log file for this iteration
+        local log_file=".ralph-iteration-${iteration}.log"
+
+        # Run Claude Code
+        echo -e "${BLUE}Running Claude Code...${NC}"
+        local output
+        local exit_code=0
+
+        if output=$(claude --dangerously-skip-permissions --output-format json -p "$prompt" 2>&1); then
+            echo "$output" > "$log_file"
+        else
+            exit_code=$?
+            echo "$output" > "$log_file"
+            echo -e "${RED}Claude Code exited with error code $exit_code${NC}"
+        fi
+
+        # Parse output for promise tags
+        local result_text
+        result_text=$(echo "$output" | jq -r '.result // .message // .' 2>/dev/null || echo "$output")
+
+        if echo "$result_text" | grep -q "<promise>COMPLETE</promise>"; then
+            echo -e "${GREEN}Story $story_id completed!${NC}"
+            mark_story_complete "$story_id"
+
+            # Git commit
+            if git rev-parse --git-dir > /dev/null 2>&1; then
+                git add -A
+                git commit -m "feat($story_id): $story_title" 2>/dev/null || true
+            fi
+
+            show_progress
+        elif echo "$result_text" | grep -q "<promise>CONTINUE</promise>"; then
+            echo -e "${YELLOW}Story $story_id needs more work, continuing...${NC}"
+        else
+            echo -e "${YELLOW}No completion signal found, continuing...${NC}"
+        fi
+
+        echo ""
+        echo -e "Log saved to: $log_file"
+        echo ""
+
+        # Sleep between iterations
+        if [[ $iteration -lt $MAX_ITERATIONS ]]; then
+            echo -e "Sleeping ${SLEEP_BETWEEN_ITERATIONS}s before next iteration..."
+            sleep $SLEEP_BETWEEN_ITERATIONS
+        fi
+    done
+
+    echo -e "${RED}Max iterations ($MAX_ITERATIONS) reached${NC}"
+    show_progress
+    exit 1
+}
+
+main "$@"
