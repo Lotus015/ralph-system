@@ -288,8 +288,24 @@ main() {
         fi
 
         # Parse output for promise tags
+        # Claude --output-format json returns: {"result": "...", ...}
+        # We need to extract .result field if output is valid JSON
         local result_text
-        result_text=$(echo "$output" | jq -r '.result // .message // .' 2>/dev/null || echo "$output")
+
+        # Check if output is valid JSON and has a result field
+        if echo "$output" | jq -e '.result' > /dev/null 2>&1; then
+            # Output is JSON with .result field - extract it
+            result_text=$(echo "$output" | jq -r '.result')
+            echo -e "${BLUE}Parsed JSON output, extracted .result field${NC}"
+        elif echo "$output" | jq -e '.' > /dev/null 2>&1; then
+            # Output is valid JSON but no .result field - try .message or use whole output
+            result_text=$(echo "$output" | jq -r '.message // .')
+            echo -e "${BLUE}Parsed JSON output (no .result field)${NC}"
+        else
+            # Output is plain text - use directly
+            result_text="$output"
+            echo -e "${BLUE}Using plain text output${NC}"
+        fi
 
         if echo "$result_text" | grep -q "<promise>COMPLETE</promise>"; then
             echo -e "${GREEN}Story $story_id completed!${NC}"
