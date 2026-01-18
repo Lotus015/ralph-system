@@ -152,14 +152,21 @@ Bad:
 
 ## Commands Reference
 
-### `ralph [max_iterations]`
+### `ralph [max_iterations] [--auto-push]`
 
 Run the Ralph loop to complete user stories.
 
 ```bash
-ralph        # Run with default 50 iterations
-ralph 10     # Run with max 10 iterations
+ralph              # Run with default 50 iterations
+ralph 10           # Run with max 10 iterations
+ralph 20 --auto-push  # Run with auto-push enabled
 ```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--auto-push` | Automatically push commits to origin after each successful iteration |
 
 ### `ralph-init`
 
@@ -303,6 +310,46 @@ Ensure your `prompt.md` template is clear and includes:
 6. **Log Progress**: Appends to `progress.txt` and `.ralph-iteration-N.log`
 
 7. **Repeat**: Continues until all stories pass or max iterations reached
+
+## Auto-Push Feature
+
+The `--auto-push` flag enables automatic pushing of commits to the remote repository after each successful iteration.
+
+### When to Use
+
+Use `--auto-push` when you want to:
+- Keep a remote backup of progress as work happens
+- Enable team visibility into autonomous work
+- Trigger CI/CD pipelines on each iteration
+
+### Example Usage
+
+```bash
+ralph 20 --auto-push
+```
+
+This runs up to 20 iterations, pushing each successful commit to origin.
+
+### Remote Configuration
+
+**Important:** Ensure your git remote is configured before using `--auto-push`:
+
+```bash
+# Check if remote exists
+git remote get-url origin
+
+# Add remote if missing
+git remote add origin git@github.com:your-org/your-repo.git
+```
+
+### Behavior When Remote is Missing
+
+If no remote is configured, Ralph will:
+1. Print a yellow warning: `⚠ No git remote 'origin' configured. Skipping push.`
+2. Skip the push operation
+3. Continue to the next iteration normally
+
+The loop will not fail or exit - it simply skips the push step and continues working.
 
 ## Requirements
 
