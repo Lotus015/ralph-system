@@ -91,17 +91,39 @@ show_story_summary() {
     # Get files created and modified using git diff --name-status
     local created_files=()
     local modified_files=()
+    local untracked_files=()
 
     # Compare current state to commit before story started
-    while IFS=$'\t' read -r status file; do
-        case "$status" in
-            A) created_files+=("$file") ;;
-            M) modified_files+=("$file") ;;
-        esac
-    done < <(git diff --name-status "$commit_before" HEAD 2>/dev/null)
+    if [[ -n "$commit_before" ]]; then
+        # We have a valid commit to compare against
+        while IFS=$'\t' read -r status file; do
+            [[ -z "$file" ]] && continue
+            case "$status" in
+                A) created_files+=("$file") ;;
+                M) modified_files+=("$file") ;;
+            esac
+        done < <(git diff --name-status "$commit_before" HEAD 2>/dev/null)
+    else
+        # First commit scenario - use git diff --name-status against empty tree
+        # The empty tree hash is a well-known constant in git
+        local empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        while IFS=$'\t' read -r status file; do
+            [[ -z "$file" ]] && continue
+            case "$status" in
+                A) created_files+=("$file") ;;
+                M) modified_files+=("$file") ;;
+            esac
+        done < <(git diff --name-status "$empty_tree" HEAD 2>/dev/null)
+    fi
+
+    # Also count untracked files (not yet committed)
+    while IFS= read -r file; do
+        [[ -n "$file" ]] && untracked_files+=("$file")
+    done < <(git ls-files --others --exclude-standard 2>/dev/null)
 
     local created_count=${#created_files[@]}
     local modified_count=${#modified_files[@]}
+    local untracked_count=${#untracked_files[@]}
 
     # Get commit message from most recent commit
     local commit_msg
@@ -133,6 +155,16 @@ show_story_summary() {
             modified_names="${modified_names:0:42}..."
         fi
         echo -e "${CYAN}│${NC} ${YELLOW}~${NC} Modified: ${modified_count} file(s): ${modified_names}"
+    fi
+
+    # Untracked files (1-2 lines)
+    if [[ $untracked_count -gt 0 ]]; then
+        local untracked_names
+        untracked_names=$(IFS=', '; echo "${untracked_files[*]}")
+        if [[ ${#untracked_names} -gt 45 ]]; then
+            untracked_names="${untracked_names:0:42}..."
+        fi
+        echo -e "${CYAN}│${NC} ${GRAY}?${NC} Untracked: ${untracked_count} file(s): ${untracked_names}"
     fi
 
     # Test results (1 line)
@@ -574,10 +606,20 @@ show_completion_summary() {
         local parent_commit
         parent_commit=$(git rev-parse "${first_commit_in_session}^" 2>/dev/null || echo "")
         if [[ -n "$parent_commit" ]]; then
+            # Normal case: compare parent commit to HEAD
             files_created=$(git diff --name-status "$parent_commit" HEAD 2>/dev/null | grep -c "^A" || echo "0")
             files_modified=$(git diff --name-status "$parent_commit" HEAD 2>/dev/null | grep -c "^M" || echo "0")
+        else
+            # First commit scenario: compare against empty tree
+            local empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+            files_created=$(git diff --name-status "$empty_tree" HEAD 2>/dev/null | grep -c "^A" || echo "0")
+            files_modified=$(git diff --name-status "$empty_tree" HEAD 2>/dev/null | grep -c "^M" || echo "0")
         fi
     fi
+
+    # Also count untracked files
+    local untracked_count=0
+    untracked_count=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
 
     # Get GitHub repo URL if available
     if git remote get-url origin &> /dev/null; then
@@ -602,6 +644,9 @@ show_completion_summary() {
     printf "${GREEN}║${NC}  Total Commits:     %-28s${GREEN}║${NC}\n" "$total_commits"
     printf "${GREEN}║${NC}  Files Created:     %-28s${GREEN}║${NC}\n" "$files_created"
     printf "${GREEN}║${NC}  Files Modified:    %-28s${GREEN}║${NC}\n" "$files_modified"
+    if [[ "$untracked_count" -gt 0 ]]; then
+        printf "${GREEN}║${NC}  Untracked Files:   %-28s${GREEN}║${NC}\n" "$untracked_count"
+    fi
     echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
     printf "${GREEN}║${NC}  Avg Time/Story:    %-28s${GREEN}║${NC}\n" "$(format_duration $avg_time_secs)"
     if [[ "$fastest_secs" -gt 0 ]]; then
