@@ -13,16 +13,20 @@ NC='\033[0m'
 
 # Show usage
 show_usage() {
-    echo "Usage: ralph [max_iterations]"
+    echo "Usage: ralph [max_iterations] [options]"
     echo ""
     echo "Run the Ralph Loop System to complete user stories from prd.json"
     echo ""
     echo "Arguments:"
     echo "  max_iterations  Maximum number of iterations (default: 50)"
     echo ""
+    echo "Options:"
+    echo "  --auto-push  Automatically push commits after each successful iteration"
+    echo ""
     echo "Examples:"
     echo "  ralph        # Run with default 50 iterations"
     echo "  ralph 10     # Run with max 10 iterations"
+    echo "  ralph 20 --auto-push  # Run with auto-push enabled"
     exit 0
 }
 
@@ -31,9 +35,22 @@ if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
     show_usage
 fi
 
-# Configuration
-MAX_ITERATIONS=${1:-50}
+# Configuration defaults
+AUTO_PUSH=false
+MAX_ITERATIONS=50
 SLEEP_BETWEEN_ITERATIONS=2
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        --auto-push)
+            AUTO_PUSH=true
+            ;;
+        [0-9]*)
+            MAX_ITERATIONS=$arg
+            ;;
+    esac
+done
 
 # Validate max_iterations is a number
 if ! [[ "$MAX_ITERATIONS" =~ ^[0-9]+$ ]]; then
