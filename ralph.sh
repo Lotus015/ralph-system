@@ -13,6 +13,67 @@ GRAY='\033[0;90m'
 NC='\033[0m'
 
 # ============================================================
+# Spinner Functions (S1)
+# ============================================================
+
+# Global variable to track spinner PID
+SPINNER_PID=""
+
+# Show animated spinner while Claude works
+# Usage: show_spinner "S1" &
+# Shows: '⠋ Working on S1... (0m 15s)'
+# Must be killed with stop_spinner when done
+show_spinner() {
+    local story_id="$1"
+    local spinner_frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local frame_count=${#spinner_frames[@]}
+    local start_time
+    start_time=$(date +%s)
+    local i=0
+
+    # Hide cursor
+    tput civis 2>/dev/null || true
+
+    while true; do
+        local now elapsed minutes seconds
+        now=$(date +%s)
+        elapsed=$((now - start_time))
+        minutes=$((elapsed / 60))
+        seconds=$((elapsed % 60))
+
+        # Print spinner with elapsed time (overwrite previous line)
+        printf "\r${YELLOW}%s${NC} Working on %s... ${GRAY}(%dm %02ds)${NC}  " \
+            "${spinner_frames[$i]}" "$story_id" "$minutes" "$seconds"
+
+        # Advance to next frame
+        i=$(( (i + 1) % frame_count ))
+
+        sleep 0.1
+    done
+}
+
+# Stop the spinner and clean up
+# Usage: stop_spinner
+stop_spinner() {
+    if [[ -n "$SPINNER_PID" ]] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+        kill "$SPINNER_PID" 2>/dev/null || true
+        wait "$SPINNER_PID" 2>/dev/null || true
+    fi
+    SPINNER_PID=""
+
+    # Show cursor again
+    tput cnorm 2>/dev/null || true
+
+    # Clear the spinner line
+    printf "\r\033[K"
+}
+
+# Cleanup function for trap
+cleanup_spinner() {
+    stop_spinner
+}
+
+# ============================================================
 # Iteration Output Formatting Functions (S4)
 # ============================================================
 
@@ -518,8 +579,16 @@ main() {
         # Log file for this iteration
         local log_file=".ralph-iteration-${iteration}.log"
 
-        # Run Claude Code
+        # Run Claude Code with spinner
         log_progress "Running Claude Code..."
+
+        # Start spinner in background
+        show_spinner "$story_id" &
+        SPINNER_PID=$!
+
+        # Ensure spinner is cleaned up on exit
+        trap cleanup_spinner EXIT INT TERM
+
         local output
         local exit_code=0
 
@@ -528,6 +597,12 @@ main() {
         else
             exit_code=$?
             echo "$output" > "$log_file"
+        fi
+
+        # Stop spinner now that Claude is done
+        stop_spinner
+
+        if [[ $exit_code -ne 0 ]]; then
             log_error "Claude Code exited with error code $exit_code"
         fi
 
