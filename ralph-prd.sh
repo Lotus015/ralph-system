@@ -17,14 +17,16 @@ show_usage() {
     echo "Convert a markdown PRD to prd.json format"
     echo ""
     echo "Options:"
+    echo "  -y, --yes       Auto-save to prd.json without prompting"
     echo "  -v, --validate  Validate existing prd.json structure"
     echo "  -l, --list      List incomplete stories from prd.json"
     echo "  -h, --help      Show this help message"
     echo ""
     echo "Examples:"
-    echo "  ralph-prd prd-template.md    # Convert markdown to JSON"
-    echo "  ralph-prd -v                 # Validate prd.json"
-    echo "  ralph-prd -l                 # List incomplete stories"
+    echo "  ralph-prd prd-template.md       # Convert markdown to JSON (interactive)"
+    echo "  ralph-prd -y prd-template.md    # Convert and auto-save to prd.json"
+    echo "  ralph-prd -v                    # Validate prd.json"
+    echo "  ralph-prd -l                    # List incomplete stories"
     exit 0
 }
 
@@ -156,6 +158,7 @@ list_incomplete() {
 # Convert markdown to JSON
 convert_markdown() {
     local md_file="$1"
+    local auto_save="${2:-false}"
 
     if [[ ! -f "$md_file" ]]; then
         echo -e "${RED}Error: File not found: $md_file${NC}"
@@ -206,17 +209,29 @@ Rules:
 - Parse 'Tests:' line into tests array (split by comma or newline)
 - Always set passes: false and completedAt: null
 - Story IDs should be S1, S2, S3, etc.
-- Output ONLY valid JSON, no markdown or explanation
+- Output ONLY valid JSON, no markdown, no code blocks, no explanation
 
 Markdown content:
 $md_content"
 
     # Run Claude to convert
     local output
-    if output=$(claude --dangerously-skip-permissions -p "$prompt" 2>&1); then
-        # Extract JSON from output (Claude might add explanation)
+    if output=$(claude --print "$prompt" 2>&1); then
+        # Extract JSON from output - handle multi-line JSON
         local json_output
-        json_output=$(echo "$output" | grep -o '{.*}' | head -1 || echo "$output")
+        # Try to extract JSON object from output (handles both clean JSON and wrapped JSON)
+        json_output=$(echo "$output" | sed -n '/^{/,/^}/p' | head -n 100)
+
+        # If that didn't work, try to find JSON in the full output
+        if [[ -z "$json_output" ]] || ! echo "$json_output" | jq empty 2>/dev/null; then
+            # Try extracting from code block markers
+            json_output=$(echo "$output" | sed -n '/```json/,/```/p' | sed '1d;$d')
+        fi
+
+        # If still no valid JSON, use the full output
+        if [[ -z "$json_output" ]] || ! echo "$json_output" | jq empty 2>/dev/null; then
+            json_output="$output"
+        fi
 
         # Try to parse as JSON
         if echo "$json_output" | jq empty 2>/dev/null; then
@@ -225,16 +240,22 @@ $md_content"
             echo -e "${BLUE}Preview:${NC}"
             echo "$json_output" | jq '.'
 
-            echo ""
-            read -p "Save as prd.json? (y/n): " -n 1 -r
-            echo ""
-
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
+            # Auto-save if flag is set (for non-interactive/automated use)
+            if [[ "$auto_save" == "true" ]]; then
                 echo "$json_output" | jq '.' > prd.json
                 echo -e "${GREEN}Saved to prd.json${NC}"
             else
-                echo "$json_output" | jq '.' > prd-draft.json
-                echo -e "${YELLOW}Saved to prd-draft.json${NC}"
+                echo ""
+                read -p "Save as prd.json? (y/n): " -n 1 -r
+                echo ""
+
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    echo "$json_output" | jq '.' > prd.json
+                    echo -e "${GREEN}Saved to prd.json${NC}"
+                else
+                    echo "$json_output" | jq '.' > prd-draft.json
+                    echo -e "${YELLOW}Saved to prd-draft.json${NC}"
+                fi
             fi
         else
             echo -e "${RED}Error: Claude output is not valid JSON${NC}"
@@ -254,20 +275,36 @@ $md_content"
 }
 
 # Main
-case "${1:-}" in
-    -v|--validate)
-        validate_prd
-        ;;
-    -l|--list)
-        list_incomplete
-        ;;
-    -h|--help)
-        show_usage
-        ;;
-    "")
-        show_usage
-        ;;
-    *)
-        convert_markdown "$1"
-        ;;
-esac
+auto_save=false
+md_file=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -v|--validate)
+            validate_prd
+            exit 0
+            ;;
+        -l|--list)
+            list_incomplete
+            exit 0
+            ;;
+        -h|--help)
+            show_usage
+            ;;
+        -y|--yes)
+            auto_save=true
+            shift
+            ;;
+        *)
+            md_file="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$md_file" ]]; then
+    show_usage
+fi
+
+convert_markdown "$md_file" "$auto_save"
