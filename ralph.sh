@@ -91,7 +91,6 @@ show_story_summary() {
     # Get files created and modified using git diff --name-status
     local created_files=()
     local modified_files=()
-    local untracked_files=()
 
     # Compare current state to commit before story started
     if [[ -n "$commit_before" ]]; then
@@ -105,7 +104,6 @@ show_story_summary() {
         done < <(git diff --name-status "$commit_before" HEAD 2>/dev/null)
     else
         # First commit scenario - use git diff --name-status against empty tree
-        # The empty tree hash is a well-known constant in git
         local empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
         while IFS=$'\t' read -r status file; do
             [[ -z "$file" ]] && continue
@@ -116,16 +114,11 @@ show_story_summary() {
         done < <(git diff --name-status "$empty_tree" HEAD 2>/dev/null)
     fi
 
-    # Also count untracked files (not yet committed)
-    while IFS= read -r file; do
-        [[ -n "$file" ]] && untracked_files+=("$file")
-    done < <(git ls-files --others --exclude-standard 2>/dev/null)
-
     local created_count=${#created_files[@]}
     local modified_count=${#modified_files[@]}
-    local untracked_count=${#untracked_files[@]}
+    local total_files=$((created_count + modified_count))
 
-    # Get commit message from most recent commit
+    # Get commit message from most recent commit (without redundant prefix)
     local commit_msg
     commit_msg=$(git log -1 --format="%s" 2>/dev/null || echo "No commit")
 
@@ -133,41 +126,35 @@ show_story_summary() {
     local duration_formatted
     duration_formatted=$(format_duration "$duration_secs")
 
-    # Build compact summary (max 10 lines)
+    # Build compact summary with short separator
     echo ""
-    echo -e "${CYAN}┌─ Summary: ${story_id} ────────────────────────────────────${NC}"
+    echo -e "${CYAN}━━━ ${story_id} Summary ━━━${NC}"
 
-    # Files created (1-2 lines)
-    if [[ $created_count -gt 0 ]]; then
-        local created_names
-        created_names=$(IFS=', '; echo "${created_files[*]}")
-        if [[ ${#created_names} -gt 45 ]]; then
-            created_names="${created_names:0:42}..."
+    # Files in compact format: '📄 2 created, 1 modified' or list if <= 5 files
+    if [[ $total_files -gt 5 ]]; then
+        # More than 5 files - show count only with hint
+        echo -e "  📄  ${total_files} files changed (run git diff to see)"
+    elif [[ $total_files -gt 0 ]]; then
+        # 5 or fewer files - show compact count and list filenames
+        local file_summary=""
+        if [[ $created_count -gt 0 ]] && [[ $modified_count -gt 0 ]]; then
+            file_summary="${created_count} created, ${modified_count} modified"
+        elif [[ $created_count -gt 0 ]]; then
+            file_summary="${created_count} created"
+        else
+            file_summary="${modified_count} modified"
         fi
-        echo -e "${CYAN}│${NC} ${GREEN}+${NC} Created: ${created_count} file(s): ${created_names}"
+        echo -e "  📄  ${file_summary}"
+        # List individual filenames (basename only for cleaner output)
+        for f in "${created_files[@]}"; do
+            echo -e "      ${GREEN}+${NC} $(basename "$f")"
+        done
+        for f in "${modified_files[@]}"; do
+            echo -e "      ${YELLOW}~${NC} $(basename "$f")"
+        done
     fi
 
-    # Files modified (1-2 lines)
-    if [[ $modified_count -gt 0 ]]; then
-        local modified_names
-        modified_names=$(IFS=', '; echo "${modified_files[*]}")
-        if [[ ${#modified_names} -gt 45 ]]; then
-            modified_names="${modified_names:0:42}..."
-        fi
-        echo -e "${CYAN}│${NC} ${YELLOW}~${NC} Modified: ${modified_count} file(s): ${modified_names}"
-    fi
-
-    # Untracked files (1-2 lines)
-    if [[ $untracked_count -gt 0 ]]; then
-        local untracked_names
-        untracked_names=$(IFS=', '; echo "${untracked_files[*]}")
-        if [[ ${#untracked_names} -gt 45 ]]; then
-            untracked_names="${untracked_names:0:42}..."
-        fi
-        echo -e "${CYAN}│${NC} ${GRAY}?${NC} Untracked: ${untracked_count} file(s): ${untracked_names}"
-    fi
-
-    # Test results (1 line)
+    # Test results (aligned)
     local test_icon test_color
     if [[ "$test_passed" == "true" ]]; then
         test_icon="✓"
@@ -176,28 +163,27 @@ show_story_summary() {
         test_icon="✗"
         test_color="${RED}"
     fi
-    echo -e "${CYAN}│${NC} ${test_color}${test_icon}${NC} Tests: ${test_cmd}"
+    echo -e "  ${test_color}${test_icon}${NC}   Tests: ${test_cmd}"
 
-    # Commit message (1 line, truncate if needed)
+    # Commit message - no "Git:" prefix, just show the message directly
     local display_msg="$commit_msg"
     if [[ ${#display_msg} -gt 50 ]]; then
         display_msg="${display_msg:0:47}..."
     fi
-    echo -e "${CYAN}│${NC} 📝 Commit: ${display_msg}"
+    echo -e "  📝  ${display_msg}"
 
-    # Push status (1 line)
-    local push_icon
+    # Push status (aligned)
+    local push_display
     case "$push_status" in
-        "SUCCESS") push_icon="${GREEN}✓ Pushed${NC}" ;;
-        "FAILED")  push_icon="${RED}✗ Failed${NC}" ;;
-        *)         push_icon="${GRAY}- Skipped${NC}" ;;
+        "SUCCESS") push_display="${GREEN}✓ Pushed${NC}" ;;
+        "FAILED")  push_display="${RED}✗ Push failed${NC}" ;;
+        *)         push_display="${GRAY}- Not pushed${NC}" ;;
     esac
-    echo -e "${CYAN}│${NC} 🚀 Push: ${push_icon}"
+    echo -e "  🚀  ${push_display}"
 
-    # Duration (1 line)
-    echo -e "${CYAN}│${NC} ⏱️  Duration: ${duration_formatted}"
-
-    echo -e "${CYAN}└──────────────────────────────────────────────────────${NC}"
+    # Duration (aligned)
+    echo -e "  ⏱️   ${duration_formatted}"
+    echo ""
 }
 
 # ============================================================
