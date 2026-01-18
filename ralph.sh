@@ -77,6 +77,16 @@ check_dependencies() {
     fi
 }
 
+# Check if git remote origin exists
+check_git_remote() {
+    if git remote get-url origin &> /dev/null; then
+        return 0
+    else
+        echo -e "${YELLOW}Warning: No git remote 'origin' configured. Skipping push.${NC}"
+        return 1
+    fi
+}
+
 # Check required files exist
 check_files() {
     if [[ ! -f "prd.json" ]]; then
