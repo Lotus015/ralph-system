@@ -1,8 +1,9 @@
-# Ralph Loop artifacts
+# Ralph Loop artifacts (in project directories)
 .ralph-state
 .ralph-iteration-*.log
 progress.txt
-prd.json
+/prd.json
+!examples/*/prd.json
 
 # OS files
 .DS_Store

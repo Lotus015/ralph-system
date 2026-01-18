@@ -1,0 +1,77 @@
+{
+  "project": "Button Component",
+  "branchName": "main",
+  "description": "Reusable React button component with variants",
+  "userStories": [
+    {
+      "id": "S1",
+      "priority": 1,
+      "title": "Setup React project",
+      "description": "Initialize React project with TypeScript and testing",
+      "acceptance": [
+        "package.json exists with react and typescript",
+        "Project builds without errors",
+        "Basic test runs successfully"
+      ],
+      "tests": ["npm test -- --watchAll=false"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S2",
+      "priority": 2,
+      "title": "Create base Button component",
+      "description": "Create Button component with basic styling",
+      "acceptance": [
+        "Button component renders",
+        "Accepts children prop",
+        "onClick handler works"
+      ],
+      "tests": ["npm test -- --watchAll=false"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S3",
+      "priority": 3,
+      "title": "Add button variants",
+      "description": "Add primary, secondary, and danger variants",
+      "acceptance": [
+        "variant prop accepts primary, secondary, danger",
+        "Each variant has distinct styling",
+        "Default variant is primary"
+      ],
+      "tests": ["npm test -- --watchAll=false"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S4",
+      "priority": 4,
+      "title": "Add size options",
+      "description": "Add small, medium, large size options",
+      "acceptance": [
+        "size prop accepts small, medium, large",
+        "Each size has appropriate padding and font size",
+        "Default size is medium"
+      ],
+      "tests": ["npm test -- --watchAll=false"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S5",
+      "priority": 5,
+      "title": "Add disabled state",
+      "description": "Add disabled prop with visual feedback",
+      "acceptance": [
+        "disabled prop prevents clicks",
+        "Disabled button has reduced opacity",
+        "Cursor changes to not-allowed"
+      ],
+      "tests": ["npm test -- --watchAll=false"],
+      "passes": false,
+      "completedAt": null
+    }
+  ]
+}

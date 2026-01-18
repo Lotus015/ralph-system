@@ -1,0 +1,77 @@
+{
+  "project": "Todo API",
+  "branchName": "main",
+  "description": "Simple todo list REST API with Express.js",
+  "userStories": [
+    {
+      "id": "S1",
+      "priority": 1,
+      "title": "Setup project structure",
+      "description": "Initialize Node.js project with Express, create basic server",
+      "acceptance": [
+        "package.json exists with express dependency",
+        "Server starts on port 3000",
+        "GET / returns 200 with JSON response"
+      ],
+      "tests": ["npm test"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S2",
+      "priority": 2,
+      "title": "Implement GET /todos",
+      "description": "Create endpoint to list all todos",
+      "acceptance": [
+        "GET /todos returns array of todos",
+        "Response includes id, title, completed fields",
+        "Returns 200 status code"
+      ],
+      "tests": ["npm test"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S3",
+      "priority": 3,
+      "title": "Implement POST /todos",
+      "description": "Create endpoint to add new todo",
+      "acceptance": [
+        "POST /todos creates new todo",
+        "Returns created todo with generated id",
+        "Returns 201 status code"
+      ],
+      "tests": ["npm test"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S4",
+      "priority": 4,
+      "title": "Implement PUT /todos/:id",
+      "description": "Create endpoint to update a todo",
+      "acceptance": [
+        "PUT /todos/:id updates existing todo",
+        "Returns updated todo",
+        "Returns 404 if todo not found"
+      ],
+      "tests": ["npm test"],
+      "passes": false,
+      "completedAt": null
+    },
+    {
+      "id": "S5",
+      "priority": 5,
+      "title": "Implement DELETE /todos/:id",
+      "description": "Create endpoint to delete a todo",
+      "acceptance": [
+        "DELETE /todos/:id removes todo",
+        "Returns 204 on success",
+        "Returns 404 if todo not found"
+      ],
+      "tests": ["npm test"],
+      "passes": false,
+      "completedAt": null
+    }
+  ]
+}
