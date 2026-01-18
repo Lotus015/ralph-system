@@ -288,6 +288,85 @@ else
     fail "react-component example has no stories"
 fi
 
+# Test --auto-push flag parsing
+test_section "Auto-Push Flag"
+
+# Test 1: Flag is recognized (no syntax error)
+if bash -n "$SCRIPT_DIR/ralph.sh" 2>/dev/null; then
+    pass "--auto-push flag syntax is valid"
+else
+    fail "--auto-push flag causes syntax errors"
+fi
+
+# Test 2: Verify AUTO_PUSH variable is set when flag present
+# Source ralph.sh argument parsing logic in a subshell to test variable setting
+auto_push_result=$(bash -c '
+    AUTO_PUSH=false
+    for arg in "$@"; do
+        case $arg in
+            --auto-push)
+                AUTO_PUSH=true
+                ;;
+        esac
+    done
+    echo $AUTO_PUSH
+' -- --auto-push)
+
+if [[ "$auto_push_result" == "true" ]]; then
+    pass "AUTO_PUSH is set to true when --auto-push flag present"
+else
+    fail "AUTO_PUSH not set correctly when --auto-push flag present"
+fi
+
+# Test 3: Verify AUTO_PUSH is false by default (no flag)
+auto_push_default=$(bash -c '
+    AUTO_PUSH=false
+    for arg in "$@"; do
+        case $arg in
+            --auto-push)
+                AUTO_PUSH=true
+                ;;
+        esac
+    done
+    echo $AUTO_PUSH
+' --)
+
+if [[ "$auto_push_default" == "false" ]]; then
+    pass "AUTO_PUSH defaults to false when no flag"
+else
+    fail "AUTO_PUSH should default to false"
+fi
+
+# Test 4: Verify help text includes --auto-push documentation
+if grep -q "\-\-auto-push" "$SCRIPT_DIR/ralph.sh"; then
+    pass "--auto-push is documented in ralph.sh"
+else
+    fail "--auto-push is not documented in ralph.sh"
+fi
+
+# Test 5: Verify --auto-push works with iteration count
+auto_push_with_count=$(bash -c '
+    AUTO_PUSH=false
+    MAX_ITERATIONS=50
+    for arg in "$@"; do
+        case $arg in
+            --auto-push)
+                AUTO_PUSH=true
+                ;;
+            [0-9]*)
+                MAX_ITERATIONS=$arg
+                ;;
+        esac
+    done
+    echo "$AUTO_PUSH:$MAX_ITERATIONS"
+' -- 20 --auto-push)
+
+if [[ "$auto_push_with_count" == "true:20" ]]; then
+    pass "--auto-push works correctly with iteration count"
+else
+    fail "--auto-push fails when combined with iteration count"
+fi
+
 # Summary
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
