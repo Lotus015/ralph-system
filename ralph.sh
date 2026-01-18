@@ -12,6 +12,44 @@ BLUE='\033[0;34m'
 GRAY='\033[0;90m'
 NC='\033[0m'
 
+# ============================================================
+# Iteration Output Formatting Functions (S4)
+# ============================================================
+
+# Show clear separator line before iteration starts
+show_separator() {
+    echo ""
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+}
+
+# Show iteration header with ⚡ prefix
+# Usage: show_iteration_header iteration_number story_id story_title
+show_iteration_header() {
+    local iteration="$1"
+    local story_id="$2"
+    local story_title="$3"
+    echo -e "${YELLOW}⚡ Iteration ${iteration}: Working on ${story_id} - ${story_title}${NC}"
+}
+
+# Log progress message with > prefix (during work)
+log_progress() {
+    local message="$1"
+    echo -e "${BLUE}>${NC} ${message}"
+}
+
+# Log success message with ✓ prefix (on completion)
+log_success() {
+    local message="$1"
+    echo -e "${GREEN}✓${NC} ${message}"
+}
+
+# Log error message with ✗ prefix (on errors)
+log_error() {
+    local message="$1"
+    echo -e "${RED}✗${NC} ${message}"
+}
+
 # Show usage
 show_usage() {
     echo "Usage: ralph [max_iterations] [options]"
@@ -348,7 +386,7 @@ main() {
         next_story=$(get_next_story)
 
         if [[ -z "$next_story" ]]; then
-            echo -e "${GREEN}All stories complete!${NC}"
+            log_success "All stories complete!"
             show_progress
             exit 0
         fi
@@ -373,9 +411,11 @@ main() {
         show_progress_bar
         echo ""
 
-        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${YELLOW}Iteration $iteration: Working on $story_id - $story_title${NC}"
-        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        # Clear separator before iteration work begins
+        show_separator
+
+        # Show iteration header with ⚡ prefix
+        show_iteration_header "$iteration" "$story_id" "$story_title"
 
         # Generate prompt
         local prompt
@@ -385,7 +425,7 @@ main() {
         local log_file=".ralph-iteration-${iteration}.log"
 
         # Run Claude Code
-        echo -e "${BLUE}Running Claude Code...${NC}"
+        log_progress "Running Claude Code..."
         local output
         local exit_code=0
 
@@ -394,7 +434,7 @@ main() {
         else
             exit_code=$?
             echo "$output" > "$log_file"
-            echo -e "${RED}Claude Code exited with error code $exit_code${NC}"
+            log_error "Claude Code exited with error code $exit_code"
         fi
 
         # Parse output for promise tags
@@ -406,19 +446,19 @@ main() {
         if echo "$output" | jq -e '.result' > /dev/null 2>&1; then
             # Output is JSON with .result field - extract it
             result_text=$(echo "$output" | jq -r '.result')
-            echo -e "${BLUE}Parsed JSON output, extracted .result field${NC}"
+            log_progress "Parsed JSON output, extracted .result field"
         elif echo "$output" | jq -e '.' > /dev/null 2>&1; then
             # Output is valid JSON but no .result field - try .message or use whole output
             result_text=$(echo "$output" | jq -r '.message // .')
-            echo -e "${BLUE}Parsed JSON output (no .result field)${NC}"
+            log_progress "Parsed JSON output (no .result field)"
         else
             # Output is plain text - use directly
             result_text="$output"
-            echo -e "${BLUE}Using plain text output${NC}"
+            log_progress "Using plain text output"
         fi
 
         if echo "$result_text" | grep -q "<promise>COMPLETE</promise>"; then
-            echo -e "${GREEN}Story $story_id completed!${NC}"
+            log_success "Story $story_id completed!"
             mark_story_complete "$story_id"
 
             # Note: Claude Code already commits changes per prompt instructions
@@ -437,11 +477,11 @@ main() {
                         current_branch=$(git branch --show-current)
                         local push_exit_code=0
                         if git push origin "$current_branch" 2>&1; then
-                            echo -e "${GREEN}Pushed to origin${NC}"
+                            log_success "Pushed to origin"
                             echo "Push status: SUCCESS - Pushed to origin/$current_branch" >> "$log_file"
                         else
                             push_exit_code=$?
-                            echo -e "${RED}Warning: Push failed (exit code $push_exit_code), continuing...${NC}"
+                            log_error "Push failed (exit code $push_exit_code), continuing..."
                             echo "Push status: FAILED - Exit code $push_exit_code" >> "$log_file"
                         fi
                     else
@@ -454,13 +494,13 @@ main() {
             show_story_list
             show_progress_bar
         elif echo "$result_text" | grep -q "<promise>CONTINUE</promise>"; then
-            echo -e "${YELLOW}Story $story_id needs more work, continuing...${NC}"
+            log_progress "Story $story_id needs more work, continuing..."
         else
-            echo -e "${YELLOW}No completion signal found, continuing...${NC}"
+            log_progress "No completion signal found, continuing..."
         fi
 
         echo ""
-        echo -e "Log saved to: $log_file"
+        log_progress "Log saved to: $log_file"
         echo ""
 
         # Sleep between iterations
@@ -470,7 +510,7 @@ main() {
         fi
     done
 
-    echo -e "${RED}Max iterations ($MAX_ITERATIONS) reached${NC}"
+    log_error "Max iterations ($MAX_ITERATIONS) reached"
     show_progress
     exit 1
 }
