@@ -226,10 +226,37 @@ show_progress() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
+# Calculate elapsed time since START_TIME
+get_elapsed_time() {
+    local now elapsed minutes seconds
+    now=$(date +%s)
+    elapsed=$((now - START_TIME))
+    minutes=$((elapsed / 60))
+    seconds=$((elapsed % 60))
+    printf "%02d:%02d" "$minutes" "$seconds"
+}
+
+# Show header box with project info
+show_header() {
+    local iteration="$1"
+    local project_name elapsed_time
+    project_name=$(jq -r '.project' prd.json)
+    elapsed_time=$(get_elapsed_time)
+
+    echo -e "${BLUE}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║${NC}  ${GREEN}${project_name}${NC}"
+    echo -e "${BLUE}║${NC}  Iteration: ${YELLOW}${iteration}${NC} / ${MAX_ITERATIONS}"
+    echo -e "${BLUE}║${NC}  Elapsed: ${YELLOW}${elapsed_time}${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════╝${NC}"
+}
+
 # Main loop
 main() {
     check_dependencies
     check_files
+
+    # Capture start time for elapsed time calculation
+    START_TIME=$(date +%s)
 
     echo -e "${BLUE}Ralph Loop System v1.0${NC}"
     echo -e "Max iterations: ${MAX_ITERATIONS}"
@@ -262,6 +289,10 @@ main() {
 
         increment_iteration
         iteration=$(get_iteration)
+
+        # Show header with project info at start of each iteration
+        show_header "$iteration"
+        echo ""
 
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo -e "${YELLOW}Iteration $iteration: Working on $story_id - $story_title${NC}"
