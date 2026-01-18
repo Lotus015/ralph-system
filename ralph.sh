@@ -558,19 +558,19 @@ show_progress_bar() {
 # Stats: total commits, files created/modified
 # Box around summary, links to GitHub repo if pushed
 # Includes timing statistics from recorded story durations
+# Grouped sections: 📊 Stats, ⏱️ Timing, 🔗 Repository
 show_completion_summary() {
     local total_stories total_time_secs total_commits avg_time_secs
-    local minutes seconds avg_minutes avg_seconds
     local github_url=""
     local fastest_secs slowest_secs total_recorded_secs stories_with_timing
 
-    # Get total stories
+    # Get total stories and completed count
     total_stories=$(count_stories)
+    local completed_stories
+    completed_stories=$(count_completed)
 
     # Calculate total time
     total_time_secs=$(($(date +%s) - START_TIME))
-    minutes=$((total_time_secs / 60))
-    seconds=$((total_time_secs % 60))
 
     # Get timing statistics from recorded durations
     stories_with_timing=$(jq '[.userStories[] | select(.durationSecs != null and .durationSecs > 0)] | length' prd.json)
@@ -590,9 +590,6 @@ show_completion_summary() {
             avg_time_secs=0
         fi
     fi
-
-    avg_minutes=$((avg_time_secs / 60))
-    avg_seconds=$((avg_time_secs % 60))
 
     # Count total commits during this session (commits since START_TIME)
     total_commits=$(git rev-list --count --since="@$START_TIME" HEAD 2>/dev/null || echo "0")
@@ -617,10 +614,6 @@ show_completion_summary() {
         fi
     fi
 
-    # Also count untracked files
-    local untracked_count=0
-    untracked_count=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
-
     # Get GitHub repo URL if available
     if git remote get-url origin &> /dev/null; then
         github_url=$(git remote get-url origin)
@@ -633,31 +626,54 @@ show_completion_summary() {
         fi
     fi
 
+    # Box width: 52 chars inner content + 2 for borders = 54 total
+    # Label column: 20 chars, Value column: 30 chars (right-aligned)
     echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║${NC}                                                  ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}       ${YELLOW}🎉 All Stories Complete!${NC}                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                  ${GREEN}║${NC}"
-    echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
-    printf "${GREEN}║${NC}  Total Stories:     %-28s${GREEN}║${NC}\n" "$total_stories"
-    printf "${GREEN}║${NC}  Total Time:        %-28s${GREEN}║${NC}\n" "$(format_duration $total_time_secs)"
-    printf "${GREEN}║${NC}  Total Commits:     %-28s${GREEN}║${NC}\n" "$total_commits"
-    printf "${GREEN}║${NC}  Files Created:     %-28s${GREEN}║${NC}\n" "$files_created"
-    printf "${GREEN}║${NC}  Files Modified:    %-28s${GREEN}║${NC}\n" "$files_modified"
-    if [[ "$untracked_count" -gt 0 ]]; then
-        printf "${GREEN}║${NC}  Untracked Files:   %-28s${GREEN}║${NC}\n" "$untracked_count"
-    fi
-    echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
-    printf "${GREEN}║${NC}  Avg Time/Story:    %-28s${GREEN}║${NC}\n" "$(format_duration $avg_time_secs)"
+    echo -e "${GREEN}╔════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}          ${YELLOW}🎉 All Stories Complete!${NC}                  ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}╠════════════════════════════════════════════════════╣${NC}"
+
+    # 📊 Stats Section
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${CYAN}📊 Stats${NC}                                          ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Total Stories:" "$completed_stories"
+    printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Total Commits:" "$total_commits"
+    printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Files Created:" "$files_created"
+    printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Files Modified:" "$files_modified"
+
+    # 📊 Timing Section
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}╠════════════════════════════════════════════════════╣${NC}"
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${CYAN}⏱️  Timing${NC}                                         ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Total Time:" "$(format_duration $total_time_secs)"
+    printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Avg Time/Story:" "$(format_duration $avg_time_secs)"
     if [[ "$fastest_secs" -gt 0 ]]; then
-        printf "${GREEN}║${NC}  Fastest Story:     %-28s${GREEN}║${NC}\n" "$(format_duration $fastest_secs)"
-        printf "${GREEN}║${NC}  Slowest Story:     %-28s${GREEN}║${NC}\n" "$(format_duration $slowest_secs)"
+        printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Fastest Story:" "$(format_duration $fastest_secs)"
+        printf "${GREEN}║${NC}  %-20s%30s  ${GREEN}║${NC}\n" "Slowest Story:" "$(format_duration $slowest_secs)"
     fi
+
+    # 🔗 Repository Section (only if GitHub URL available)
     if [[ -n "$github_url" ]]; then
-        echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
-        printf "${GREEN}║${NC}  GitHub: %-40s${GREEN}║${NC}\n" "$github_url"
+        echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+        echo -e "${GREEN}╠════════════════════════════════════════════════════╣${NC}"
+        echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}  ${CYAN}🔗 Repository${NC}                                      ${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+        # Truncate URL if too long
+        local display_url="$github_url"
+        if [[ ${#display_url} -gt 48 ]]; then
+            display_url="${display_url:0:45}..."
+        fi
+        printf "${GREEN}║${NC}  %-50s  ${GREEN}║${NC}\n" "$display_url"
     fi
-    echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
+
+    echo -e "${GREEN}║${NC}                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
 
