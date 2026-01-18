@@ -251,6 +251,51 @@ show_header() {
     echo -e "${BLUE}╚══════════════════════════════════════════════════╝${NC}"
 }
 
+# Show progress bar
+# Shows percentage: ████████░░░░ 40%
+# Width adjusts to terminal width (max 50 chars)
+show_progress_bar() {
+    local total completed percentage
+    total=$(count_stories)
+    completed=$(count_completed)
+
+    # Calculate percentage
+    if [[ $total -eq 0 ]]; then
+        percentage=0
+    else
+        percentage=$((completed * 100 / total))
+    fi
+
+    # Get terminal width and calculate bar width (max 50)
+    local term_width bar_width
+    term_width=$(tput cols 2>/dev/null || echo 80)
+    # Reserve space for percentage display " 100%" = 5 chars, plus some padding
+    bar_width=$((term_width - 10))
+    if [[ $bar_width -gt 50 ]]; then
+        bar_width=50
+    fi
+    if [[ $bar_width -lt 10 ]]; then
+        bar_width=10
+    fi
+
+    # Calculate filled and empty portions
+    local filled_width empty_width
+    filled_width=$((bar_width * percentage / 100))
+    empty_width=$((bar_width - filled_width))
+
+    # Build the progress bar
+    local filled_bar="" empty_bar=""
+    for ((i=0; i<filled_width; i++)); do
+        filled_bar+="█"
+    done
+    for ((i=0; i<empty_width; i++)); do
+        empty_bar+="░"
+    done
+
+    # Display the progress bar
+    printf "${GREEN}%s${GRAY}%s${NC} %3d%%\n" "$filled_bar" "$empty_bar" "$percentage"
+}
+
 # Show story list with status icons
 # Icons: ✅ complete, 🔄 in-progress, ⏸️ pending
 # Color coded: green=done, yellow=current, gray=pending
@@ -325,6 +370,7 @@ main() {
 
         # Show story list with current story highlighted
         show_story_list "$story_id"
+        show_progress_bar
         echo ""
 
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -404,8 +450,9 @@ main() {
                 fi
             fi
 
-            # Show updated story list after completion
+            # Show updated story list and progress bar after completion
             show_story_list
+            show_progress_bar
         elif echo "$result_text" | grep -q "<promise>CONTINUE</promise>"; then
             echo -e "${YELLOW}Story $story_id needs more work, continuing...${NC}"
         else
