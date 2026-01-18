@@ -219,14 +219,18 @@ generate_prompt() {
     echo "$prompt"
 }
 
-# Mark story as complete in prd.json
+# Mark story as complete in prd.json with timing information
 mark_story_complete() {
     local story_id="$1"
-    local timestamp
+    local story_start_time="$2"
+    local timestamp duration_secs
     timestamp=$(get_timestamp)
 
-    jq --arg id "$story_id" --arg ts "$timestamp" \
-        '(.userStories[] | select(.id == $id)) |= . + {passes: true, completedAt: $ts}' \
+    # Calculate duration in seconds
+    duration_secs=$(($(date +%s) - story_start_time))
+
+    jq --arg id "$story_id" --arg ts "$timestamp" --argjson dur "$duration_secs" \
+        '(.userStories[] | select(.id == $id)) |= . + {passes: true, completedAt: $ts, durationSecs: $dur}' \
         prd.json > prd.json.tmp && mv prd.json.tmp prd.json
 }
 
@@ -337,10 +341,12 @@ show_progress_bar() {
 # Show final summary when all stories complete
 # Shows: 🎉 All Stories Complete!, total stories, total time, total commits, average time per story
 # Box around summary, links to GitHub repo if pushed
+# Includes timing statistics from recorded story durations
 show_summary() {
     local total_stories total_time_secs total_commits avg_time_secs
     local minutes seconds avg_minutes avg_seconds
     local github_url=""
+    local fastest_secs slowest_secs total_recorded_secs stories_with_timing
 
     # Get total stories
     total_stories=$(count_stories)
@@ -350,15 +356,27 @@ show_summary() {
     minutes=$((total_time_secs / 60))
     seconds=$((total_time_secs % 60))
 
-    # Calculate average time per story
-    if [[ $total_stories -gt 0 ]]; then
-        avg_time_secs=$((total_time_secs / total_stories))
-        avg_minutes=$((avg_time_secs / 60))
-        avg_seconds=$((avg_time_secs % 60))
+    # Get timing statistics from recorded durations
+    stories_with_timing=$(jq '[.userStories[] | select(.durationSecs != null and .durationSecs > 0)] | length' prd.json)
+    if [[ "$stories_with_timing" -gt 0 ]]; then
+        total_recorded_secs=$(jq '[.userStories[] | select(.durationSecs != null) | .durationSecs] | add // 0' prd.json)
+        fastest_secs=$(jq '[.userStories[] | select(.durationSecs != null and .durationSecs > 0) | .durationSecs] | min // 0' prd.json)
+        slowest_secs=$(jq '[.userStories[] | select(.durationSecs != null and .durationSecs > 0) | .durationSecs] | max // 0' prd.json)
+        avg_time_secs=$((total_recorded_secs / stories_with_timing))
     else
-        avg_minutes=0
-        avg_seconds=0
+        # Fallback to calculating from total time
+        total_recorded_secs=$total_time_secs
+        fastest_secs=0
+        slowest_secs=0
+        if [[ $total_stories -gt 0 ]]; then
+            avg_time_secs=$((total_time_secs / total_stories))
+        else
+            avg_time_secs=0
+        fi
     fi
+
+    avg_minutes=$((avg_time_secs / 60))
+    avg_seconds=$((avg_time_secs % 60))
 
     # Count total commits during this session (commits since START_TIME)
     total_commits=$(git rev-list --count --since="@$START_TIME" HEAD 2>/dev/null || echo "0")
@@ -382,9 +400,14 @@ show_summary() {
     echo -e "${GREEN}║${NC}                                                  ${GREEN}║${NC}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
     printf "${GREEN}║${NC}  Total Stories:     %-28s${GREEN}║${NC}\n" "$total_stories"
-    printf "${GREEN}║${NC}  Total Time:        %-28s${GREEN}║${NC}\n" "$(printf '%02d:%02d' $minutes $seconds)"
+    printf "${GREEN}║${NC}  Total Time:        %-28s${GREEN}║${NC}\n" "$(format_duration $total_time_secs)"
     printf "${GREEN}║${NC}  Total Commits:     %-28s${GREEN}║${NC}\n" "$total_commits"
-    printf "${GREEN}║${NC}  Avg Time/Story:    %-28s${GREEN}║${NC}\n" "$(printf '%02d:%02d' $avg_minutes $avg_seconds)"
+    echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
+    printf "${GREEN}║${NC}  Avg Time/Story:    %-28s${GREEN}║${NC}\n" "$(format_duration $avg_time_secs)"
+    if [[ "$fastest_secs" -gt 0 ]]; then
+        printf "${GREEN}║${NC}  Fastest Story:     %-28s${GREEN}║${NC}\n" "$(format_duration $fastest_secs)"
+        printf "${GREEN}║${NC}  Slowest Story:     %-28s${GREEN}║${NC}\n" "$(format_duration $slowest_secs)"
+    fi
     if [[ -n "$github_url" ]]; then
         echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
         printf "${GREEN}║${NC}  GitHub: %-40s${GREEN}║${NC}\n" "$github_url"
@@ -393,22 +416,31 @@ show_summary() {
     echo ""
 }
 
+# Format seconds to MM:SS
+format_duration() {
+    local secs="$1"
+    local mins=$((secs / 60))
+    local remaining_secs=$((secs % 60))
+    printf "%02d:%02d" "$mins" "$remaining_secs"
+}
+
 # Show story list with status icons
 # Icons: ✅ complete, 🔄 in-progress, ⏸️ pending
 # Color coded: green=done, yellow=current, gray=pending
+# Shows duration in MM:SS format for completed stories
 show_story_list() {
     local current_story_id="${1:-}"
 
     echo -e "${BLUE}Stories:${NC}"
 
     # Read stories and display with appropriate icons and colors
-    jq -r '.userStories[] | "\(.id)|\(.title)|\(.passes)|\(.completedAt // "")"' prd.json | while IFS='|' read -r id title passes completed_at; do
+    jq -r '.userStories[] | "\(.id)|\(.title)|\(.passes)|\(.durationSecs // 0)"' prd.json | while IFS='|' read -r id title passes duration_secs; do
         if [[ "$passes" == "true" ]]; then
             # Completed story - green with checkmark
             local time_display=""
-            if [[ -n "$completed_at" ]]; then
-                # Extract time portion (HH:MM:SS) from ISO timestamp
-                time_display=" (${completed_at:11:8})"
+            if [[ "$duration_secs" -gt 0 ]]; then
+                # Format duration in MM:SS
+                time_display=" ($(format_duration "$duration_secs"))"
             fi
             echo -e "  ${GREEN}✅ ${id}: ${title}${time_display}${NC}"
         elif [[ "$id" == "$current_story_id" ]]; then
@@ -459,6 +491,10 @@ main() {
 
         increment_iteration
         iteration=$(get_iteration)
+
+        # Record story start time for duration tracking
+        local story_start_time
+        story_start_time=$(date +%s)
 
         # Show header with project info at start of each iteration
         show_header "$iteration"
@@ -517,7 +553,7 @@ main() {
 
         if echo "$result_text" | grep -q "<promise>COMPLETE</promise>"; then
             log_success "Story $story_id completed!"
-            mark_story_complete "$story_id"
+            mark_story_complete "$story_id" "$story_start_time"
 
             # Note: Claude Code already commits changes per prompt instructions
             # Ralph only needs to commit prd.json update and handle auto-push
