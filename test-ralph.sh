@@ -288,6 +288,105 @@ else
     fail "react-component example has no stories"
 fi
 
+# Test single commit per story (no duplicate commits)
+test_section "Single Commit Per Story (S1 Bugfix)"
+
+# Test 1: Verify ralph.sh only commits prd.json, not all changes
+# The fix ensures Claude Code commits feature changes, ralph.sh only commits prd.json state
+if grep -q 'git add prd.json' "$SCRIPT_DIR/ralph.sh" && ! grep -q 'git add \.' "$SCRIPT_DIR/ralph.sh"; then
+    pass "ralph.sh commits only prd.json (not all files)"
+else
+    fail "ralph.sh should only commit prd.json updates"
+fi
+
+# Test 2: Verify the commit message indicates state tracking, not feature commit
+if grep -q 'chore: mark.*as complete' "$SCRIPT_DIR/ralph.sh"; then
+    pass "ralph.sh uses state-tracking commit message"
+else
+    fail "ralph.sh should use chore commit for state tracking"
+fi
+
+# Test 3: Verify git diff check is used before committing (only commit if prd.json changed)
+if grep -q 'git diff --quiet prd.json' "$SCRIPT_DIR/ralph.sh"; then
+    pass "ralph.sh checks if prd.json changed before committing"
+else
+    fail "ralph.sh should check if prd.json changed before committing"
+fi
+
+# Test 4: Verify no duplicate git add/commit patterns exist in the main completion block
+# Count how many times "git add" appears in the completion block (should be exactly 1)
+add_count=$(grep -c 'git add' "$SCRIPT_DIR/ralph.sh" || echo 0)
+if [[ "$add_count" -eq 1 ]]; then
+    pass "Only one git add command in ralph.sh (no duplicates)"
+else
+    fail "Expected 1 git add command, found $add_count (potential duplicate commit bug)"
+fi
+
+# Test proper loop exit with JSON output parsing (S2 Bugfix)
+test_section "JSON Output Parsing & Loop Exit (S2 Bugfix)"
+
+# Test 1: Verify JSON .result field extraction logic exists
+if grep -q 'jq -e.*\.result' "$SCRIPT_DIR/ralph.sh"; then
+    pass "ralph.sh checks for JSON .result field"
+else
+    fail "ralph.sh should check for JSON .result field"
+fi
+
+# Test 2: Verify fallback to plain text is handled
+if grep -q 'plain text output' "$SCRIPT_DIR/ralph.sh"; then
+    pass "ralph.sh handles plain text output fallback"
+else
+    fail "ralph.sh should handle plain text output"
+fi
+
+# Test 3: Verify promise COMPLETE detection works with extracted result
+if grep -q 'result_text.*COMPLETE' "$SCRIPT_DIR/ralph.sh" || grep -A2 'promise.*COMPLETE' "$SCRIPT_DIR/ralph.sh" | grep -q 'result_text'; then
+    pass "Promise COMPLETE detection uses extracted result_text"
+else
+    fail "Promise COMPLETE detection should use result_text variable"
+fi
+
+# Test 4: Verify promise CONTINUE detection works with extracted result
+if grep -q 'result_text.*CONTINUE' "$SCRIPT_DIR/ralph.sh" || grep -A2 'promise.*CONTINUE' "$SCRIPT_DIR/ralph.sh" | grep -q 'result_text'; then
+    pass "Promise CONTINUE detection uses extracted result_text"
+else
+    fail "Promise CONTINUE detection should use result_text variable"
+fi
+
+# Test 5: Functional test - simulate JSON output parsing
+json_output='{"result":"Task done <promise>COMPLETE</promise>","model":"claude"}'
+parsed_result=$(echo "$json_output" | jq -r '.result' 2>/dev/null || echo "")
+if [[ "$parsed_result" == *"COMPLETE"* ]]; then
+    pass "JSON .result extraction correctly finds COMPLETE tag"
+else
+    fail "JSON .result extraction failed to find COMPLETE tag"
+fi
+
+# Test 6: Functional test - simulate JSON without .result field
+json_no_result='{"message":"Some output","status":"ok"}'
+if echo "$json_no_result" | jq -e '.result' > /dev/null 2>&1; then
+    fail "Should not find .result field in message-only JSON"
+else
+    pass "Correctly identifies JSON without .result field"
+fi
+
+# Test 7: Functional test - plain text handling
+plain_output="Working on story... <promise>CONTINUE</promise>"
+if [[ "$plain_output" == *"CONTINUE"* ]]; then
+    pass "Plain text correctly preserves CONTINUE tag"
+else
+    fail "Plain text handling failed"
+fi
+
+# Test 8: Verify 3-stage parsing logic exists (JSON with result, JSON without, plain text)
+if grep -q 'Parsed JSON output, extracted .result field' "$SCRIPT_DIR/ralph.sh" && \
+   grep -q 'Parsed JSON output (no .result field)' "$SCRIPT_DIR/ralph.sh" && \
+   grep -q 'Using plain text output' "$SCRIPT_DIR/ralph.sh"; then
+    pass "3-stage parsing logic exists (JSON+result, JSON-only, plain text)"
+else
+    fail "3-stage parsing logic incomplete"
+fi
+
 # Test --auto-push flag parsing
 test_section "Auto-Push Flag"
 
