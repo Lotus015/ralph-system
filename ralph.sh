@@ -455,9 +455,8 @@ get_elapsed_time() {
 
 # Show header box with project info
 # Usage: show_header iteration_number
-# Shows: 🎯 Project name, 🔄 Iteration X/Y, ⏱️ Total elapsed
-# Uses Unicode box drawing: ┌─┐ │ └─┘
-# Width adjusts to content (min 50 chars)
+# Layout: Project | Iteration | Elapsed on same line (~60 chars)
+# Uses single-line box: ┌─┬─┬─┐ │ │ │ │ └─┴─┴─┘
 show_header() {
     local iteration="$1"
     local project_name elapsed_time total_stories
@@ -465,41 +464,40 @@ show_header() {
     elapsed_time=$(get_elapsed_time)
     total_stories=$(count_stories)
 
-    # Build content lines
-    local line1="🎯 ${project_name}"
-    local line2="🔄 Iteration ${iteration}/${total_stories}"
-    local line3="⏱️  Total elapsed: ${elapsed_time}"
+    # Fixed column widths to fit ~60 chars total
+    # Project: 28 chars, Iteration: 12 chars, Elapsed: 12 chars
+    local col1_width=28
+    local col2_width=12
+    local col3_width=12
 
-    # Calculate max content width (min 50 chars)
-    local max_len=50
-    local len1=${#line1}
-    local len2=${#line2}
-    local len3=${#line3}
-    [[ $len1 -gt $max_len ]] && max_len=$len1
-    [[ $len2 -gt $max_len ]] && max_len=$len2
-    [[ $len3 -gt $max_len ]] && max_len=$len3
+    # Truncate project name if too long
+    local display_project="$project_name"
+    if [[ ${#display_project} -gt $((col1_width - 2)) ]]; then
+        display_project="${display_project:0:$((col1_width - 5))}..."
+    fi
 
-    # Add padding for box (2 spaces each side)
-    local box_width=$((max_len + 4))
+    # Build content
+    local iter_text="${iteration}/${total_stories}"
+    local time_text="${elapsed_time}"
 
-    # Build horizontal border
-    local border=""
-    for ((i=0; i<box_width; i++)); do
-        border+="─"
-    done
+    # Build horizontal borders
+    local border1="" border2="" border3=""
+    for ((i=0; i<col1_width; i++)); do border1+="─"; done
+    for ((i=0; i<col2_width; i++)); do border2+="─"; done
+    for ((i=0; i<col3_width; i++)); do border3+="─"; done
 
-    # Pad content lines to box width
-    local pad1 pad2 pad3
-    pad1=$((box_width - len1 - 2))
-    pad2=$((box_width - len2 - 2))
-    pad3=$((box_width - len3 - 2))
+    # Calculate padding for centering project name
+    local proj_len=${#display_project}
+    local proj_pad_left=$(( (col1_width - proj_len) / 2 ))
+    local proj_pad_right=$(( col1_width - proj_len - proj_pad_left ))
 
-    # Print the box
-    echo -e "${CYAN}┌${border}┐${NC}"
-    printf "${CYAN}│${NC} ${GREEN}%s${NC}%*s ${CYAN}│${NC}\n" "$line1" "$pad1" ""
-    printf "${CYAN}│${NC} ${YELLOW}%s${NC}%*s ${CYAN}│${NC}\n" "$line2" "$pad2" ""
-    printf "${CYAN}│${NC} %s%*s ${CYAN}│${NC}\n" "$line3" "$pad3" ""
-    echo -e "${CYAN}└${border}┘${NC}"
+    # Print the single-line box
+    echo -e "${CYAN}┌${border1}┬${border2}┬${border3}┐${NC}"
+    printf "${CYAN}│${NC}%*s${GREEN}%s${NC}%*s${CYAN}│${NC} ${YELLOW}%*s${NC} ${CYAN}│${NC} ${CYAN}%*s${NC} ${CYAN}│${NC}\n" \
+        "$proj_pad_left" "" "$display_project" "$proj_pad_right" "" \
+        "$((col2_width - 2))" "$iter_text" \
+        "$((col3_width - 2))" "$time_text"
+    echo -e "${CYAN}└${border1}┴${border2}┴${border3}┘${NC}"
 }
 
 # Show progress bar
