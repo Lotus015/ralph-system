@@ -1,0 +1,22 @@
+# Ralph Loop artifacts
+.ralph-state
+.ralph-iteration-*.log
+progress.txt
+prd.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Backup files
+*.bak
+progress-*.txt
+prd-draft.json
+prd-draft.txt
