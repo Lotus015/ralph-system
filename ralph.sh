@@ -521,11 +521,12 @@ show_progress_bar() {
     printf "Progress: ${GREEN}%s${GRAY}%s${NC} %3d%% (%d/%d stories)\n" "$filled_bar" "$empty_bar" "$percentage" "$completed" "$total"
 }
 
-# Show final summary when all stories complete
+# Show final completion summary when all stories complete
 # Shows: 🎉 All Stories Complete!, total stories, total time, total commits, average time per story
+# Stats: total commits, files created/modified
 # Box around summary, links to GitHub repo if pushed
 # Includes timing statistics from recorded story durations
-show_summary() {
+show_completion_summary() {
     local total_stories total_time_secs total_commits avg_time_secs
     local minutes seconds avg_minutes avg_seconds
     local github_url=""
@@ -564,6 +565,20 @@ show_summary() {
     # Count total commits during this session (commits since START_TIME)
     total_commits=$(git rev-list --count --since="@$START_TIME" HEAD 2>/dev/null || echo "0")
 
+    # Count files created and modified during this session
+    local files_created=0 files_modified=0
+    local first_commit_in_session
+    first_commit_in_session=$(git rev-list --since="@$START_TIME" HEAD 2>/dev/null | tail -1)
+    if [[ -n "$first_commit_in_session" ]]; then
+        # Get the parent of the first commit to compare from before session started
+        local parent_commit
+        parent_commit=$(git rev-parse "${first_commit_in_session}^" 2>/dev/null || echo "")
+        if [[ -n "$parent_commit" ]]; then
+            files_created=$(git diff --name-status "$parent_commit" HEAD 2>/dev/null | grep -c "^A" || echo "0")
+            files_modified=$(git diff --name-status "$parent_commit" HEAD 2>/dev/null | grep -c "^M" || echo "0")
+        fi
+    fi
+
     # Get GitHub repo URL if available
     if git remote get-url origin &> /dev/null; then
         github_url=$(git remote get-url origin)
@@ -585,6 +600,8 @@ show_summary() {
     printf "${GREEN}║${NC}  Total Stories:     %-28s${GREEN}║${NC}\n" "$total_stories"
     printf "${GREEN}║${NC}  Total Time:        %-28s${GREEN}║${NC}\n" "$(format_duration $total_time_secs)"
     printf "${GREEN}║${NC}  Total Commits:     %-28s${GREEN}║${NC}\n" "$total_commits"
+    printf "${GREEN}║${NC}  Files Created:     %-28s${GREEN}║${NC}\n" "$files_created"
+    printf "${GREEN}║${NC}  Files Modified:    %-28s${GREEN}║${NC}\n" "$files_modified"
     echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
     printf "${GREEN}║${NC}  Avg Time/Story:    %-28s${GREEN}║${NC}\n" "$(format_duration $avg_time_secs)"
     if [[ "$fastest_secs" -gt 0 ]]; then
@@ -660,7 +677,7 @@ main() {
         next_story=$(get_next_story)
 
         if [[ -z "$next_story" ]]; then
-            show_summary
+            show_completion_summary
             exit 0
         fi
 
