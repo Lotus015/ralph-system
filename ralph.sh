@@ -74,6 +74,101 @@ cleanup_spinner() {
 }
 
 # ============================================================
+# Story Summary Functions (S2)
+# ============================================================
+
+# Show mini summary after each story completes
+# Usage: show_story_summary story_id duration_secs test_cmd test_result push_status commit_before
+# Displays compact summary of what was accomplished
+show_story_summary() {
+    local story_id="$1"
+    local duration_secs="$2"
+    local test_cmd="$3"
+    local test_passed="$4"
+    local push_status="$5"
+    local commit_before="$6"
+
+    # Get files created and modified using git diff --name-status
+    local created_files=()
+    local modified_files=()
+
+    # Compare current state to commit before story started
+    while IFS=$'\t' read -r status file; do
+        case "$status" in
+            A) created_files+=("$file") ;;
+            M) modified_files+=("$file") ;;
+        esac
+    done < <(git diff --name-status "$commit_before" HEAD 2>/dev/null)
+
+    local created_count=${#created_files[@]}
+    local modified_count=${#modified_files[@]}
+
+    # Get commit message from most recent commit
+    local commit_msg
+    commit_msg=$(git log -1 --format="%s" 2>/dev/null || echo "No commit")
+
+    # Format duration
+    local duration_formatted
+    duration_formatted=$(format_duration "$duration_secs")
+
+    # Build compact summary (max 10 lines)
+    echo ""
+    echo -e "${BLUE}┌─ Summary: ${story_id} ────────────────────────────────────${NC}"
+
+    # Files created (1-2 lines)
+    if [[ $created_count -gt 0 ]]; then
+        local created_names
+        created_names=$(IFS=', '; echo "${created_files[*]}")
+        if [[ ${#created_names} -gt 45 ]]; then
+            created_names="${created_names:0:42}..."
+        fi
+        echo -e "${BLUE}│${NC} ${GREEN}+${NC} Created: ${created_count} file(s): ${created_names}"
+    fi
+
+    # Files modified (1-2 lines)
+    if [[ $modified_count -gt 0 ]]; then
+        local modified_names
+        modified_names=$(IFS=', '; echo "${modified_files[*]}")
+        if [[ ${#modified_names} -gt 45 ]]; then
+            modified_names="${modified_names:0:42}..."
+        fi
+        echo -e "${BLUE}│${NC} ${YELLOW}~${NC} Modified: ${modified_count} file(s): ${modified_names}"
+    fi
+
+    # Test results (1 line)
+    local test_icon test_color
+    if [[ "$test_passed" == "true" ]]; then
+        test_icon="✓"
+        test_color="${GREEN}"
+    else
+        test_icon="✗"
+        test_color="${RED}"
+    fi
+    echo -e "${BLUE}│${NC} ${test_color}${test_icon}${NC} Tests: ${test_cmd}"
+
+    # Commit message (1 line, truncate if needed)
+    local display_msg="$commit_msg"
+    if [[ ${#display_msg} -gt 50 ]]; then
+        display_msg="${display_msg:0:47}..."
+    fi
+    echo -e "${BLUE}│${NC} 📝 Commit: ${display_msg}"
+
+    # Push status (1 line)
+    local push_icon
+    case "$push_status" in
+        "SUCCESS") push_icon="${GREEN}✓ Pushed${NC}" ;;
+        "FAILED")  push_icon="${RED}✗ Failed${NC}" ;;
+        *)         push_icon="${GRAY}- Skipped${NC}" ;;
+    esac
+    echo -e "${BLUE}│${NC} 🚀 Push: ${push_icon}"
+
+    # Duration (1 line)
+    echo -e "${BLUE}│${NC} ⏱️  Duration: ${duration_formatted}"
+
+    echo -e "${BLUE}└──────────────────────────────────────────────────────${NC}"
+}
+
+# ============================================================
 # Iteration Output Formatting Functions (S4)
 # ============================================================
 
@@ -557,6 +652,10 @@ main() {
         local story_start_time
         story_start_time=$(date +%s)
 
+        # Capture commit hash before story starts (for summary diff)
+        local commit_before_story
+        commit_before_story=$(git rev-parse HEAD 2>/dev/null || echo "")
+
         # Show header with project info at start of each iteration
         show_header "$iteration"
         echo ""
@@ -630,6 +729,9 @@ main() {
             log_success "Story $story_id completed!"
             mark_story_complete "$story_id" "$story_start_time"
 
+            # Track push status for summary
+            local push_status="SKIPPED"
+
             # Note: Claude Code already commits changes per prompt instructions
             # Ralph only needs to commit prd.json update and handle auto-push
             if git rev-parse --git-dir > /dev/null 2>&1; then
@@ -648,16 +750,25 @@ main() {
                         if git push origin "$current_branch" 2>&1; then
                             log_success "Pushed to origin"
                             echo "Push status: SUCCESS - Pushed to origin/$current_branch" >> "$log_file"
+                            push_status="SUCCESS"
                         else
                             push_exit_code=$?
                             log_error "Push failed (exit code $push_exit_code), continuing..."
                             echo "Push status: FAILED - Exit code $push_exit_code" >> "$log_file"
+                            push_status="FAILED"
                         fi
                     else
                         echo "Push status: SKIPPED - No remote configured" >> "$log_file"
                     fi
                 fi
             fi
+
+            # Calculate story duration
+            local story_duration_secs
+            story_duration_secs=$(($(date +%s) - story_start_time))
+
+            # Show mini summary after successful story completion
+            show_story_summary "$story_id" "$story_duration_secs" "$test_commands" "true" "$push_status" "$commit_before_story"
 
             # Show updated story list and progress bar after completion
             show_story_list
