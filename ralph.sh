@@ -295,27 +295,31 @@ main() {
             echo -e "${GREEN}Story $story_id completed!${NC}"
             mark_story_complete "$story_id"
 
-            # Git commit
+            # Note: Claude Code already commits changes per prompt instructions
+            # Ralph only needs to commit prd.json update and handle auto-push
             if git rev-parse --git-dir > /dev/null 2>&1; then
-                git add -A
-                if git commit -m "feat($story_id): $story_title" 2>/dev/null; then
-                    # Auto-push if enabled
-                    if [[ "$AUTO_PUSH" == "true" ]]; then
-                        if check_git_remote; then
-                            local current_branch
-                            current_branch=$(git branch --show-current)
-                            local push_exit_code=0
-                            if git push origin "$current_branch" 2>&1; then
-                                echo -e "${GREEN}Pushed to origin${NC}"
-                                echo "Push status: SUCCESS - Pushed to origin/$current_branch" >> "$log_file"
-                            else
-                                push_exit_code=$?
-                                echo -e "${RED}Warning: Push failed (exit code $push_exit_code), continuing...${NC}"
-                                echo "Push status: FAILED - Exit code $push_exit_code" >> "$log_file"
-                            fi
+                # Only commit prd.json if it was modified (story marked complete)
+                if ! git diff --quiet prd.json 2>/dev/null; then
+                    git add prd.json
+                    git commit -m "chore: mark $story_id as complete" 2>/dev/null || true
+                fi
+
+                # Auto-push if enabled
+                if [[ "$AUTO_PUSH" == "true" ]]; then
+                    if check_git_remote; then
+                        local current_branch
+                        current_branch=$(git branch --show-current)
+                        local push_exit_code=0
+                        if git push origin "$current_branch" 2>&1; then
+                            echo -e "${GREEN}Pushed to origin${NC}"
+                            echo "Push status: SUCCESS - Pushed to origin/$current_branch" >> "$log_file"
                         else
-                            echo "Push status: SKIPPED - No remote configured" >> "$log_file"
+                            push_exit_code=$?
+                            echo -e "${RED}Warning: Push failed (exit code $push_exit_code), continuing...${NC}"
+                            echo "Push status: FAILED - Exit code $push_exit_code" >> "$log_file"
                         fi
+                    else
+                        echo "Push status: SKIPPED - No remote configured" >> "$log_file"
                     fi
                 fi
             fi
