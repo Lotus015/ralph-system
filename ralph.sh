@@ -334,6 +334,65 @@ show_progress_bar() {
     printf "${GREEN}%s${GRAY}%s${NC} %3d%%\n" "$filled_bar" "$empty_bar" "$percentage"
 }
 
+# Show final summary when all stories complete
+# Shows: 🎉 All Stories Complete!, total stories, total time, total commits, average time per story
+# Box around summary, links to GitHub repo if pushed
+show_summary() {
+    local total_stories total_time_secs total_commits avg_time_secs
+    local minutes seconds avg_minutes avg_seconds
+    local github_url=""
+
+    # Get total stories
+    total_stories=$(count_stories)
+
+    # Calculate total time
+    total_time_secs=$(($(date +%s) - START_TIME))
+    minutes=$((total_time_secs / 60))
+    seconds=$((total_time_secs % 60))
+
+    # Calculate average time per story
+    if [[ $total_stories -gt 0 ]]; then
+        avg_time_secs=$((total_time_secs / total_stories))
+        avg_minutes=$((avg_time_secs / 60))
+        avg_seconds=$((avg_time_secs % 60))
+    else
+        avg_minutes=0
+        avg_seconds=0
+    fi
+
+    # Count total commits during this session (commits since START_TIME)
+    total_commits=$(git rev-list --count --since="@$START_TIME" HEAD 2>/dev/null || echo "0")
+
+    # Get GitHub repo URL if available
+    if git remote get-url origin &> /dev/null; then
+        github_url=$(git remote get-url origin)
+        # Convert SSH URL to HTTPS if needed
+        if [[ "$github_url" == git@github.com:* ]]; then
+            github_url="https://github.com/${github_url#git@github.com:}"
+            github_url="${github_url%.git}"
+        elif [[ "$github_url" == *.git ]]; then
+            github_url="${github_url%.git}"
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}                                                  ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}       ${YELLOW}🎉 All Stories Complete!${NC}                   ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                  ${GREEN}║${NC}"
+    echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
+    printf "${GREEN}║${NC}  Total Stories:     %-28s${GREEN}║${NC}\n" "$total_stories"
+    printf "${GREEN}║${NC}  Total Time:        %-28s${GREEN}║${NC}\n" "$(printf '%02d:%02d' $minutes $seconds)"
+    printf "${GREEN}║${NC}  Total Commits:     %-28s${GREEN}║${NC}\n" "$total_commits"
+    printf "${GREEN}║${NC}  Avg Time/Story:    %-28s${GREEN}║${NC}\n" "$(printf '%02d:%02d' $avg_minutes $avg_seconds)"
+    if [[ -n "$github_url" ]]; then
+        echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
+        printf "${GREEN}║${NC}  GitHub: %-40s${GREEN}║${NC}\n" "$github_url"
+    fi
+    echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
 # Show story list with status icons
 # Icons: ✅ complete, 🔄 in-progress, ⏸️ pending
 # Color coded: green=done, yellow=current, gray=pending
@@ -386,8 +445,7 @@ main() {
         next_story=$(get_next_story)
 
         if [[ -z "$next_story" ]]; then
-            log_success "All stories complete!"
-            show_progress
+            show_summary
             exit 0
         fi
 
