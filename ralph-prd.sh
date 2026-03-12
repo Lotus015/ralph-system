@@ -215,26 +215,31 @@ Markdown content:
 $md_content"
 
     # Run Claude to convert
+    # Helper: validate JSON reliably (macOS system jq has a bug where 'jq empty' returns 0 for invalid JSON)
+    is_valid_json() {
+        echo "$1" | jq -e '.' > /dev/null 2>&1
+    }
+
     local output
     if output=$(claude --print "$prompt" 2>&1); then
         # Extract JSON from output - handle multi-line JSON
         local json_output
         # Try to extract JSON object from output (handles both clean JSON and wrapped JSON)
-        json_output=$(echo "$output" | sed -n '/^{/,/^}/p' | head -n 100)
+        json_output=$(echo "$output" | sed -n '/^{/,/^}/p')
 
         # If that didn't work, try to find JSON in the full output
-        if [[ -z "$json_output" ]] || ! echo "$json_output" | jq empty 2>/dev/null; then
+        if [[ -z "$json_output" ]] || ! is_valid_json "$json_output"; then
             # Try extracting from code block markers
             json_output=$(echo "$output" | sed -n '/```json/,/```/p' | sed '1d;$d')
         fi
 
         # If still no valid JSON, use the full output
-        if [[ -z "$json_output" ]] || ! echo "$json_output" | jq empty 2>/dev/null; then
+        if [[ -z "$json_output" ]] || ! is_valid_json "$json_output"; then
             json_output="$output"
         fi
 
         # Try to parse as JSON
-        if echo "$json_output" | jq empty 2>/dev/null; then
+        if is_valid_json "$json_output"; then
             echo -e "${GREEN}Conversion successful!${NC}"
             echo ""
             echo -e "${BLUE}Preview:${NC}"
